@@ -10,20 +10,27 @@ class QRManager {
         
         // Check if QRious library is loaded
         if (typeof QRious === 'undefined') {
-            console.error('QRious library not loaded. Make sure to include qrious.min.js before this script.');
+            console.error('QRious library not loaded. Make sure to include qrious.min.js');
             this.showFallback(canvas, 'QR Library\nNot Loaded');
             return;
         }
         
         try {
+            // Clear any existing content
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
             const qr = new QRious({
                 element: canvas,
                 size: options.width || 200,
                 value: data,
                 background: options.colorLight || '#ffffff',
-                foreground: options.colorDark || '#000000'
+                foreground: options.colorDark || '#000000',
+                level: 'M' // Error correction level
             });
+            
             console.log('QR Code generated successfully for:', canvasId);
+            
         } catch (error) {
             console.error('QR Code generation error:', error);
             this.showFallback(canvas, 'QR Generation\nFailed');
@@ -57,15 +64,30 @@ class QRManager {
         });
     }
     
-    static generateWalletQR(canvasId, walletAddress) {
-        const solanaUri = `solana:${walletAddress}`;
-        this.generateQR(canvasId, solanaUri, {
-            width: 150,
-            height: 150
+    // Generate QR for tip jar URL (for sharing)
+    static generateUrlQR(canvasId, url, options = {}) {
+        this.generateQR(canvasId, url, {
+            width: options.width || 200,
+            height: options.height || 200,
+            colorLight: options.colorLight || '#ffffff',
+            colorDark: options.colorDark || '#000000'
         });
     }
     
-    static generateTipQR(canvasId, walletAddress, amount = null) {
+    // Generate QR for Solana wallet address (for payments)
+    static generateWalletQR(canvasId, walletAddress, options = {}) {
+        // Create Solana URI for wallet apps to recognize
+        const solanaUri = `solana:${walletAddress}`;
+        this.generateQR(canvasId, solanaUri, {
+            width: options.width || 150,
+            height: options.height || 150,
+            colorLight: options.colorLight || '#ffffff',
+            colorDark: options.colorDark || '#000000'
+        });
+    }
+    
+    // Generate QR for Solana payment with specific amount
+    static generateTipQR(canvasId, walletAddress, amount = null, options = {}) {
         let solanaUri = `solana:${walletAddress}`;
         
         if (amount) {
@@ -73,15 +95,10 @@ class QRManager {
         }
         
         this.generateQR(canvasId, solanaUri, {
-            width: 200,
-            height: 200
-        });
-    }
-    
-    static generateUrlQR(canvasId, url) {
-        this.generateQR(canvasId, url, {
-            width: 200,
-            height: 200
+            width: options.width || 200,
+            height: options.height || 200,
+            colorLight: options.colorLight || '#ffffff',
+            colorDark: options.colorDark || '#000000'
         });
     }
     
