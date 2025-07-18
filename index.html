@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Tip Tap - Create Your Solana Tip Jar | Crypto Tipping Tool</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Create your Solana tip jar in seconds! Accept SOL tips with custom links, QR codes, and real-time counters. Join 100+ creators getting tipped on Solana.">
+    <meta name="keywords" content="Solana tip jar, crypto tipping tool, SOL tips, Solana wallet, micro-tipping, crypto donations">
+    <meta name="author" content="Solana Tip Tap">
+    
+    <!-- Open Graph Tags -->
+    <meta property="og:title" content="Solana Tip Tap - Create Your Solana Tip Jar">
+    <meta property="og:description" content="Accept SOL tips with custom links, QR codes, and real-time counters. Low fees, instant payments.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://solanatiptap.com">
+    
+    <!-- Twitter Card Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Solana Tip Tap - Create Your Solana Tip Jar">
+    <meta name="twitter:description" content="Accept SOL tips with custom links, QR codes, and real-time counters.">
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'solana-purple': '#9945FF',
+                        'solana-green': '#14F195',
+                        'solana-dark': '#1A1A1A'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Solana Web3.js -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    
+    <!-- QR Code Library - UPDATED TO QRIOUS -->
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+    
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+        }
+        .glow {
+            box-shadow: 0 0 20px rgba(153, 69, 255, 0.3);
+        }
+        .pulse-glow {
+            animation: pulse-glow 2s infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(153, 69, 255, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(153, 69, 255, 0.6); }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-solana-dark border-b border-gray-800">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <!-- Updated header with actual favicon -->
+                <img src="/favicon-32x32.png" alt="Solana Tip Tap" class="w-8 h-8">
+                <h1 class="text-2xl font-bold">Solana Tip Tap</h1>
+            </div>
+            <button id="connectWallet" class="bg-solana-purple hover:bg-purple-700 px-6 py-2 rounded-lg font-semibold transition-colors">
+                Connect Wallet
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- Hero Section -->
+        <section id="heroSection" class="text-center mb-12">
+            <h1 class="text-5xl font-bold mb-4 gradient-bg bg-clip-text text-transparent">
+                Create Your Solana Tip Jar
+            </h1>
+            <p class="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+                Accept SOL tips with custom links, QR codes, and real-time counters. 
+                Low fees, instant payments, powered by Solana.
+            </p>
+            
+            <!-- Social Proof -->
+            <div class="bg-gray-800 rounded-lg p-4 mb-8 inline-block">
+                <p class="text-solana-green font-semibold">🚀 Join 100+ creators getting tipped!</p>
+            </div>
+
+            <!-- FOMO Timer -->
+            <div id="fomoTimer" class="bg-red-900 border border-red-700 rounded-lg p-4 mb-8 max-w-md mx-auto">
+                <p class="text-red-300 font-semibold mb-2">⏰ Limited Time Launch Offer!</p>
+                <div id="countdown" class="text-2xl font-bold text-red-400"></div>
+                <p class="text-sm text-red-300 mt-2">Get your tip jar at launch prices!</p>
+            </div>
+
+            <!-- Pricing Cards -->
+            <div class="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-8">
+                <!-- Default Tip Jar card -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <h3 class="text-2xl font-bold mb-4">Default Tip Jar</h3>
+                    <div class="text-3xl font-bold text-solana-green mb-2">FREE</div>
+                    <p class="text-gray-400 mb-4">No setup cost!</p>
+                    <ul class="text-left space-y-2 mb-6">
+                        <li>✅ Random 8-digit ID</li>
+                        <li>✅ QR Code generation</li>
+                        <li>✅ Real-time tip counter</li>
+                        <li>✅ Social sharing</li>
+                        <li>✅ Basic theme</li>
+                        <li>✅ Perfect for getting started</li>
+                    </ul>
+                    <button id="createDefault" class="w-full bg-solana-purple hover:bg-purple-700 py-3 rounded-lg font-semibold transition-colors">
+                        Create Free Tip Jar
+                    </button>
+                </div>
+
+                <!-- Custom Tip Jar card -->
+                <div class="bg-gray-800 rounded-lg p-6 border border-solana-purple glow">
+                    <div class="bg-solana-purple text-white px-3 py-1 rounded-full text-sm font-semibold mb-4 inline-block">
+                        PREMIUM
+                    </div>
+                    <h3 class="text-2xl font-bold mb-4">Custom Tip Jar</h3>
+                    <div class="text-3xl font-bold text-solana-green mb-2">0.005 SOL</div>
+                    <p class="text-gray-400 mb-4">~$0.86 USD</p>
+                    <ul class="text-left space-y-2 mb-6">
+                        <li>✅ Custom link name</li>
+                        <li>✅ All free features</li>
+                        <li>✅ Premium themes</li>
+                        <li>✅ Priority support</li>
+                        <li>✅ Advanced analytics</li>
+                        <li>✅ Professional branding</li>
+                    </ul>
+                    <button id="createCustom" class="w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors">
+                        Upgrade to Premium
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Custom name section -->
+        <section id="customNameSection" class="hidden max-w-md mx-auto mb-8">
+            <div class="bg-gray-800 rounded-lg p-6 border border-solana-purple">
+                <h3 class="text-xl font-bold mb-4">Upgrade to Premium Tip Jar</h3>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Custom Link Name</label>
+                    <div class="flex">
+                        <span class="bg-gray-700 px-3 py-2 rounded-l-lg text-gray-400">solanatiptap.com/?id=</span>
+                        <input 
+                            type="text" 
+                            id="customName" 
+                            class="bg-gray-700 text-white px-3 py-2 rounded-r-lg flex-1 focus:outline-none focus:ring-2 focus:ring-solana-purple"
+                            placeholder="yourname"
+                            maxlength="20"
+                        >
+                    </div>
+                    <p class="text-sm text-gray-400 mt-2">3-20 characters, letters and numbers only</p>
+                </div>
+                
+                <!-- Premium features highlight -->
+                <div class="bg-solana-purple bg-opacity-20 rounded-lg p-4 mb-4">
+                    <h4 class="font-semibold text-solana-green mb-2">Premium Features:</h4>
+                    <ul class="text-sm space-y-1">
+                        <li>✅ Custom branded URL</li>
+                        <li>✅ Premium themes</li>
+                        <li>✅ Advanced analytics</li>
+                        <li>✅ Priority support</li>
+                    </ul>
+                </div>
+                
+                <button id="confirmCustom" class="w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors mb-2">
+                    Upgrade for 0.005 SOL (~$0.86)
+                </button>
+                <button id="cancelCustom" class="w-full bg-gray-600 hover:bg-gray-500 py-2 rounded-lg font-semibold transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </section>
+
+        <!-- Tip Jar Display (Hidden by default) -->
+        <section id="tipJarSection" class="hidden max-w-2xl mx-auto">
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <h2 class="text-2xl font-bold mb-4">Your Tip Jar is Ready! 🎉</h2>
+                
+                <!-- Tip Jar URL -->
+                <div class="bg-gray-700 rounded-lg p-4 mb-6">
+                    <p class="text-sm text-gray-400 mb-2">Your Tip Jar URL:</p>
+                    <div class="flex items-center justify-between bg-gray-900 rounded px-3 py-2">
+                        <span id="tipJarUrl" class="text-solana-green font-mono text-sm"></span>
+                        <button id="copyUrl" class="bg-solana-purple hover:bg-purple-700 px-3 py-1 rounded text-sm">
+                            Copy
+                        </button>
+                    </div>
+                </div>
+
+                <!-- QR Code -->
+                <div class="mb-6">
+                    <p class="text-sm text-gray-400 mb-2">QR Code for easy sharing:</p>
+                    <div class="bg-white p-4 rounded-lg inline-block">
+                        <canvas id="qrcode"></canvas>
+                    </div>
+                </div>
+
+                <!-- Share Button -->
+                <button id="shareTwitter" class="bg-blue-500 hover:bg-blue-600 px-6 py-3 rounded-lg font-semibold transition-colors mb-4">
+                    Share on X (Twitter) 🐦
+                </button>
+
+                <!-- Create Another -->
+                <div class="border-t border-gray-700 pt-4">
+                    <button id="createAnother" class="text-solana-purple hover:text-purple-400 font-semibold">
+                        Create Another Tip Jar
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="featuresSection" class="mt-16">
+            <h2 class="text-3xl font-bold text-center mb-12">Why Choose Solana Tip Tap?</h2>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-solana-purple rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">⚡</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Lightning Fast</h3>
+                    <p class="text-gray-400">Powered by Solana's high-speed blockchain. Tips arrive instantly with minimal fees.</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-solana-green rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">🔒</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Secure & Trustless</h3>
+                    <p class="text-gray-400">Non-custodial payments go directly to your wallet. We never store your funds.</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-16 h-16 bg-solana-purple rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span class="text-2xl">📱</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Mobile Friendly</h3>
+                    <p class="text-gray-400">QR codes and responsive design make tipping easy on any device.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+<footer class="bg-solana-dark border-t border-gray-800 mt-16">
+    <div class="container mx-auto px-4 py-8">
+        <div class="grid md:grid-cols-4 gap-8">
+            <div>
+                <div class="flex items-center space-x-2 mb-4">
+                    <img src="/favicon-32x32.png" alt="Solana Tip Tap" class="w-6 h-6">
+                    <span class="font-bold">Solana Tip Tap</span>
+                </div>
+                <p class="text-gray-400 text-sm">The easiest way to accept SOL tips with custom links and QR codes.</p>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-4">Product</h4>
+                <ul class="space-y-2 text-sm text-gray-400">
+                    <li><a href="#featuresSection" class="hover:text-white transition-colors">Features</a></li>
+                    <li><a href="#heroSection" class="hover:text-white transition-colors">Pricing</a></li>
+                    <li><a href="/blog" class="hover:text-white transition-colors">Blog</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-4">Legal</h4>
+                <ul class="space-y-2 text-sm text-gray-400">
+                    <li><a href="/terms.html" class="hover:text-white transition-colors">Terms of Use</a></li>
+                    <li><a href="/privacy.html" class="hover:text-white transition-colors">Privacy Policy</a></li>
+                    <li><a href="#" class="hover:text-white transition-colors">Help Center</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="font-semibold mb-4">Connect</h4>
+                <ul class="space-y-2 text-sm text-gray-400">
+                    <li><a href="https://twitter.com/solanatiptap" class="hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">Twitter</a></li>
+                    <li><a href="https://github.com/solanatiptap" class="hover:text-white transition-colors" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                </ul>
+                <div class="mt-4">
+                    <div class="flex items-center space-x-2 text-sm">
+                        <img src="https://cryptologos.cc/logos/solana-sol-logo.png" alt="Solana" class="w-4 h-4">
+                        <span class="text-gray-400">Powered by Solana</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; 2025 Solana Tip Tap. All rights reserved.</p>
+            <p class="mt-2">⚠️ Tips go directly to wallets. We don't store funds. Crypto involves risk.</p>
+            <div class="mt-3 flex justify-center space-x-4">
+                <a href="/terms.html" class="hover:text-white transition-colors">Terms</a>
+                <span>•</span>
+                <a href="/privacy.html" class="hover:text-white transition-colors">Privacy</a>
+                <span>•</span>
+                <a href="/blog" class="hover:text-white transition-colors">Blog</a>
+            </div>
+        </div>
+    </div>
+</footer>
+
+
+    <!-- Tip Jar Page Template (Hidden, used for individual tip jar pages) -->
+    <div id="tipJarPageTemplate" class="hidden">
+        <div class="min-h-screen bg-gray-900 text-white">
+            <div class="container mx-auto px-4 py-8">
+                <div class="max-w-md mx-auto bg-gray-800 rounded-lg p-6 text-center">
+                    <div class="mb-6">
+                        <img src="/favicon-32x32.png" alt="Solana Tip Tap" class="w-20 h-20 mx-auto mb-4 rounded-full">
+                        <h1 class="text-2xl font-bold mb-2">Send me a tip! 💜</h1>
+                        <p class="text-gray-400">Support me with SOL on Solana</p>
+                    </div>
+
+                    <!-- Tip Counter -->
+                    <div class="bg-gray-700 rounded-lg p-4 mb-6">
+                        <div class="text-2xl font-bold text-solana-green" id="tipCount">0 tips</div>
+                        <div class="text-lg text-solana-green" id="tipAmount">0 SOL received</div>
+                    </div>
+
+                    <!-- Tip Buttons -->
+                    <div class="space-y-3 mb-6">
+                        <button class="tip-btn w-full bg-solana-purple hover:bg-purple-700 py-3 rounded-lg font-semibold transition-colors" data-amount="0.001">
+                            Tip 0.001 SOL (~$0.17)
+                        </button>
+                        <button class="tip-btn w-full bg-solana-purple hover:bg-purple-700 py-3 rounded-lg font-semibold transition-colors" data-amount="0.005">
+                            Tip 0.005 SOL (~$0.86)
+                        </button>
+                        <button class="tip-btn w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors" data-amount="0.01">
+                            Tip 0.01 SOL (~$1.72) 🚀
+                        </button>
+                    </div>
+
+                    <!-- QR Code -->
+                    <div class="mb-6">
+                        <p class="text-sm text-gray-400 mb-2">Or scan to tip:</p>
+                        <div class="bg-white p-4 rounded-lg inline-block">
+                            <canvas id="walletQR"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Wallet Address -->
+                    <div class="bg-gray-700 rounded-lg p-3 mb-6">
+                        <p class="text-xs text-gray-400 mb-1">Wallet Address:</p>
+                        <div class="flex items-center justify-between">
+                            <span id="walletAddress" class="font-mono text-xs text-gray-300"></span>
+                            <button id="copyWallet" class="bg-solana-purple hover:bg-purple-700 px-2 py-1 rounded text-xs">
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Share Button -->
+                    <button id="shareTipJar" class="bg-blue-500 hover:bg-blue-600 px-6 py-2 rounded-lg font-semibold transition-colors mb-4">
+                        Share on X 🐦
+                    </button>
+
+                    <!-- Powered by -->
+                    <div class="text-center">
+                        <p class="text-xs text-gray-500">
+                            Powered by <a href="https://solanatiptap.com" class="text-solana-purple hover:text-purple-400">Solana Tip Tap</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="wallet.js"></script>
+    <script src="tipjar.js"></script>
+    <script src="utils/qr.js"></script>
+    <script src="utils/storage.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

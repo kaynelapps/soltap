@@ -1,0 +1,39 @@
+# Robots.txt for Solana Tip Tap
+# https://solanatiptap.com
+
+User-agent: *
+Allow: /
+
+# Allow all main content
+Allow: /blog/
+Allow: /styles/
+Allow: /*.js
+Allow: /*.css
+Allow: /*.png
+Allow: /*.html
+
+# Disallow utility directories from indexing (but allow access)
+Disallow: /utils/
+
+# Sitemap location
+Sitemap: https://solanatiptap.com/sitemap.xml
+
+# Crawl delay (optional - be nice to servers)
+Crawl-delay: 1
+
+# Specific bot instructions
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Block any malicious bots (optional)
+User-agent: BadBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
