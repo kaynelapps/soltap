@@ -18,22 +18,34 @@ Disallow: /utils/
 # Sitemap location
 Sitemap: https://solanatiptap.fun/sitemap.xml
 
-# Crawl delay (optional - be nice to servers)
+# Crawl delay (be nice to servers)
 Crawl-delay: 1
 
 # Specific bot instructions
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
-# Block any malicious bots (optional)
-User-agent: BadBot
-Disallow: /
-
+# Block SEO/scraping bots (optional but recommended)
 User-agent: SemrushBot
 Disallow: /
 
 User-agent: AhrefsBot
 Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# Block generic bad bots
+User-agent: BadBot
+Disallow: /
+
+User-agent: *Bot*
+Crawl-delay: 5
