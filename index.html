@@ -151,43 +151,45 @@
         </section>
 
         <!-- Custom name section -->
-        <section id="customNameSection" class="hidden max-w-md mx-auto mb-8">
-            <div class="bg-gray-800 rounded-lg p-6 border border-solana-purple">
-                <h3 class="text-xl font-bold mb-4">Upgrade to Premium Tip Jar</h3>
-                <div class="mb-4">
-                    <label class="block text-sm font-medium mb-2">Custom Link Name</label>
-                    <div class="flex">
-                        <span class="bg-gray-700 px-3 py-2 rounded-l-lg text-gray-400">solanatiptap.com/?id=</span>
-                        <input 
-                            type="text" 
-                            id="customName" 
-                            class="bg-gray-700 text-white px-3 py-2 rounded-r-lg flex-1 focus:outline-none focus:ring-2 focus:ring-solana-purple"
-                            placeholder="yourname"
-                            maxlength="20"
-                        >
-                    </div>
-                    <p class="text-sm text-gray-400 mt-2">3-20 characters, letters and numbers only</p>
-                </div>
-                
-                <!-- Premium features highlight -->
-                <div class="bg-solana-purple bg-opacity-20 rounded-lg p-4 mb-4">
-                    <h4 class="font-semibold text-solana-green mb-2">Premium Features:</h4>
-                    <ul class="text-sm space-y-1">
-                        <li>✅ Custom branded URL</li>
-                        <li>✅ Premium themes</li>
-                        <li>✅ Advanced analytics</li>
-                        <li>✅ Priority support</li>
-                    </ul>
-                </div>
-                
-                <button id="confirmCustom" class="w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors mb-2">
-                    Upgrade for 0.005 SOL (~$0.86)
-                </button>
-                <button id="cancelCustom" class="w-full bg-gray-600 hover:bg-gray-500 py-2 rounded-lg font-semibold transition-colors">
-                    Cancel
-                </button>
+       <!-- Update the custom name section -->
+<section id="customNameSection" class="hidden max-w-md mx-auto mb-8">
+    <div class="bg-gray-800 rounded-lg p-6 border border-solana-purple">
+        <h3 class="text-xl font-bold mb-4">Upgrade to Premium Tip Jar</h3>
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">Custom Link Name</label>
+            <div class="flex">
+                <span class="bg-gray-700 px-3 py-2 rounded-l-lg text-gray-400">solanatiptap.fun/</span>
+                <input 
+                    type="text" 
+                    id="customName" 
+                    class="bg-gray-700 text-white px-3 py-2 rounded-r-lg flex-1 focus:outline-none focus:ring-2 focus:ring-solana-purple"
+                    placeholder="anaskay"
+                    maxlength="20"
+                >
             </div>
-        </section>
+            <p class="text-sm text-gray-400 mt-2">3-20 characters, letters, numbers, hyphens, and underscores</p>
+        </div>
+        
+        <!-- Premium features highlight -->
+        <div class="bg-solana-purple bg-opacity-20 rounded-lg p-4 mb-4">
+            <h4 class="font-semibold text-solana-green mb-2">Premium Features:</h4>
+            <ul class="text-sm space-y-1">
+                <li>✅ Custom branded URL</li>
+                <li>✅ Premium themes</li>
+                <li>✅ Advanced analytics</li>
+                <li>✅ Priority support</li>
+            </ul>
+        </div>
+        
+        <button id="confirmCustom" class="w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors mb-2">
+            Upgrade for 0.005 SOL (~$0.86)
+        </button>
+        <button id="cancelCustom" class="w-full bg-gray-600 hover:bg-gray-500 py-2 rounded-lg font-semibold transition-colors">
+            Cancel
+        </button>
+    </div>
+</section>
+
 
         <!-- Tip Jar Display (Hidden by default) -->
         <section id="tipJarSection" class="hidden max-w-2xl mx-auto">

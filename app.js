@@ -77,7 +77,7 @@ class SolanaTipTap {
     }
 
     validateCustomName(name) {
-        const isValid = /^[a-zA-Z0-9]{3,20}$/.test(name);
+        const isValid = /^[a-zA-Z0-9_-]{3,20}$/.test(name);
         const confirmBtn = document.getElementById('confirmCustom');
         
         if (isValid && !this.isReservedName(name)) {
@@ -92,7 +92,7 @@ class SolanaTipTap {
     }
 
     isReservedName(name) {
-        const reserved = ['admin', 'api', 'www', 'mail', 'ftp', 'blog', 'help', 'support', 'terms', 'privacy'];
+        const reserved = ['admin', 'api', 'www', 'mail', 'ftp', 'blog', 'help', 'support', 'terms', 'privacy', 'about', 'contact', 'app', 'assets', 'static', 'public'];
         return reserved.includes(name.toLowerCase());
     }
 
@@ -127,7 +127,7 @@ class SolanaTipTap {
                 this.showNotification('Creating your free tip jar...', 'info');
             }
 
-            // Generate tip jar
+            // Generate tip jar ID
             const tipJarId = type === 'default' ? this.generateRandomId() : customName;
             const tipJarData = {
                 id: tipJarId,
@@ -142,7 +142,7 @@ class SolanaTipTap {
             // Save tip jar locally
             StorageManager.saveTipJar(tipJarId, tipJarData);
             
-            // Show success with universal URL
+            // Show success with clean URL
             this.showTipJarSuccess(tipJarId, tipJarData);
             
         } catch (error) {
@@ -178,8 +178,14 @@ class SolanaTipTap {
         }
     }
 
+    // Updated to generate alphanumeric IDs for better URLs
     generateRandomId() {
-        return Math.floor(10000000 + Math.random() * 90000000).toString();
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 8; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
 
     showTipJarSuccess(tipJarId, tipJarData) {
@@ -201,8 +207,8 @@ class SolanaTipTap {
         // Show tip jar section
         document.getElementById('tipJarSection').classList.remove('hidden');
         
-        // Create universal URL that works on any device/browser
-        const tipJarUrl = `${window.location.origin}/?id=${tipJarId}&wallet=${encodeURIComponent(tipJarData.wallet)}&type=${tipJarData.type}&created=${tipJarData.created}`;
+        // Create clean URL - just the ID as path
+        const tipJarUrl = `${window.location.origin}/${tipJarId}`;
         
         document.getElementById('tipJarUrl').textContent = tipJarUrl;
         
@@ -213,7 +219,7 @@ class SolanaTipTap {
         
         // Show success message
         const planType = tipJarData.plan === 'premium' ? 'Premium' : 'Free';
-        this.showNotification(`${planType} tip jar created successfully! Works on any device! 🌍`, 'success');
+        this.showNotification(`${planType} tip jar created successfully! Clean URL ready to share! 🌍`, 'success');
     }
 
     async processTip(amount) {
@@ -273,22 +279,35 @@ class SolanaTipTap {
     }
 
     checkForTipJarPage() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tipJarId = urlParams.get('id');
+        // Check if we're on a tip jar page (path-based routing)
+        const path = window.location.pathname;
         
-        if (tipJarId) {
+        // If we're on homepage (/) or have query params, handle normally
+        if (path === '/' || window.location.search) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tipJarId = urlParams.get('id');
+            
+            if (tipJarId) {
+                this.loadTipJarPage(tipJarId);
+            }
+            return;
+        }
+        
+        // Extract tip jar ID from path (remove leading slash)
+        const tipJarId = path.substring(1);
+        
+        if (tipJarId && tipJarId.length >= 3) {
             this.loadTipJarPage(tipJarId);
         }
     }
 
     loadTipJarPage(tipJarId) {
-        const urlParams = new URLSearchParams(window.location.search);
-        
         // Try localStorage first (for creator's browser)
         let tipJarData = StorageManager.getTipJar(tipJarId);
         
-        // If not found locally, get from URL parameters (universal access)
+        // If not found locally, check URL parameters for fallback
         if (!tipJarData) {
+            const urlParams = new URLSearchParams(window.location.search);
             const walletFromUrl = urlParams.get('wallet');
             const typeFromUrl = urlParams.get('type') || 'default';
             const createdFromUrl = urlParams.get('created') || Date.now();
@@ -311,6 +330,10 @@ class SolanaTipTap {
 
         if (!tipJarData) {
             this.showNotification('Tip jar not found. Please check the URL.', 'error');
+            // Redirect to homepage after 3 seconds
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 3000);
             return;
         }
 
@@ -345,6 +368,12 @@ class SolanaTipTap {
         
         // Update page title
         document.title = `Tip Jar - ${tipJarId} | Solana Tip Tap`;
+        
+        // Update meta description for better sharing
+        const metaDescription = document.querySelector('meta[name="description"]');
+        if (metaDescription) {
+            metaDescription.content = `Send SOL tips to ${tipJarId} on Solana Tip Tap. Fast, secure crypto tipping powered by Solana blockchain.`;
+        }
     }
 
     copyToClipboard(elementId) {
@@ -362,15 +391,9 @@ class SolanaTipTap {
         let url, text;
         
         if (tipJarId) {
-            // Get tip jar data to create universal URL
-            const tipJarData = StorageManager.getTipJar(tipJarId);
-            if (tipJarData) {
-                url = `${window.location.origin}/?id=${tipJarId}&wallet=${encodeURIComponent(tipJarData.wallet)}&type=${tipJarData.type}&created=${tipJarData.created}`;
-                text = `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto`;
-            } else {
-                              url = `${window.location.origin}/?id=${tipJarId}`;
-                text = `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto`;
-            }
+            // Use clean URL format
+            url = `${window.location.origin}/${tipJarId}`;
+            text = `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto`;
         } else {
             url = document.getElementById('tipJarUrl').textContent;
             text = `Just created my SOL tip jar! 🚀 ${url} #SolanaTipTap #Solana #Crypto`;
@@ -381,7 +404,7 @@ class SolanaTipTap {
     }
 
     resetToHome() {
-        window.location.href = window.location.origin;
+        window.location.href = '/';
     }
 
     startCountdown() {
@@ -393,7 +416,10 @@ class SolanaTipTap {
             
             if (distance < 0) {
                 clearInterval(timer);
-                document.getElementById('fomoTimer').style.display = 'none';
+                const fomoTimer = document.getElementById('fomoTimer');
+                if (fomoTimer) {
+                    fomoTimer.style.display = 'none';
+                }
                 return;
             }
             
@@ -401,8 +427,11 @@ class SolanaTipTap {
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
             
-            document.getElementById('countdown').textContent = 
-                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            const countdownEl = document.getElementById('countdown');
+            if (countdownEl) {
+                countdownEl.textContent = 
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
         }, 1000);
     }
 
@@ -472,7 +501,7 @@ class SolanaTipTap {
         this.showNotification('Wallet disconnected', 'warning');
     }
 
-    // Validate URL parameters
+    // Validate URL parameters (for fallback support)
     validateUrlParameters() {
         const urlParams = new URLSearchParams(window.location.search);
         const tipJarId = urlParams.get('id');
@@ -497,6 +526,12 @@ class SolanaTipTap {
         }
         return null;
     }
+
+    // Handle browser back/forward navigation
+    handlePopState() {
+        // Reload the page to handle navigation properly
+        window.location.reload();
+    }
 }
 
 // Initialize app when DOM is loaded
@@ -517,6 +552,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize the app
     window.solanaTipTap = new SolanaTipTap();
+    
+    // Handle browser navigation
+    window.addEventListener('popstate', () => {
+        if (window.solanaTipTap) {
+            window.solanaTipTap.handlePopState();
+        }
+    });
 });
 
 // Handle page visibility changes
@@ -549,4 +591,3 @@ console.log(`
 💜 Create your Solana tip jar in seconds!
 ⚡ Powered by Solana blockchain
 `);
-
