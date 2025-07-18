@@ -107,19 +107,19 @@ class SolanaTipTap {
         }
     }
 
-    async init() {
-        this.setupEventListeners();
-        this.initWalletListeners();
-        await this.autoConnectWallet();
-        this.startCountdown();
-        this.checkForTipJarPage();
-        this.updateSocialProof();
-        
-        // Update tip button prices if on tip jar page
-        if (window.location.pathname !== '/') {
-            setTimeout(() => this.updateTipButtonPrices(), 1000);
-        }
-    }
+async init() {
+    this.setupEventListeners();
+    this.initWalletListeners();
+    await this.autoConnectWallet();
+    this.startCountdown();
+    this.checkForTipJarPage();
+    this.updateSocialProof();
+    
+    // ✅ NEW: Update prices on any page after 2 seconds
+    setTimeout(() => {
+        this.updateTipButtonPrices();
+    }, 2000);
+}
 
     setupEventListeners() {
         // Wallet connection
@@ -684,69 +684,145 @@ class SolanaTipTap {
         }
     }
 
-    async loadTipJarPage(tipJarId) {
-        let tipJarData = typeof StorageManager !== 'undefined' ? StorageManager.getTipJar(tipJarId) : null;
+   async loadTipJarPage(tipJarId) {
+    let tipJarData = typeof StorageManager !== 'undefined' ? StorageManager.getTipJar(tipJarId) : null;
+    
+    if (!tipJarData) {
+        tipJarData = await this.loadTipJarFromDatabase(tipJarId);
         
-        if (!tipJarData) {
-            tipJarData = await this.loadTipJarFromDatabase(tipJarId);
-            
-            if (tipJarData && typeof StorageManager !== 'undefined') {
-                StorageManager.saveTipJar(tipJarId, tipJarData);
-            }
-        }
-
-        if (!tipJarData) {
-            this.showNotification('Tip jar not found. Please check the URL.', 'error');
-            setTimeout(() => window.location.href = '/', 3000);
-            return;
-        }
-
-        const mainElement = document.querySelector('main');
-        const templateElement = document.getElementById('tipJarPageTemplate');
-        
-        if (mainElement && templateElement) {
-            mainElement.innerHTML = templateElement.innerHTML;
-        }
-        
-        const walletAddressElement = document.getElementById('walletAddress');
-        if (walletAddressElement) {
-            walletAddressElement.textContent = `${tipJarData.wallet.slice(0, 8)}...${tipJarData.wallet.slice(-8)}`;
-        }
-        
-        // Generate wallet QR code for payments
-        if (typeof QRManager !== 'undefined') {
-            QRManager.generateWalletQR('walletQR', tipJarData.wallet);
-        }
-        
-        this.updateTipCounter(tipJarData.tips || 0, tipJarData.totalAmount || 0);
-        
-        const copyWalletBtn = document.getElementById('copyWallet');
-        if (copyWalletBtn) {
-            copyWalletBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(tipJarData.wallet).then(() => {
-                    this.showNotification('Wallet address copied!', 'success');
-                }).catch(() => {
-                    this.showNotification('Failed to copy wallet address', 'error');
-                });
-            });
-        }
-        
-        const shareTipJarBtn = document.getElementById('shareTipJar');
-        if (shareTipJarBtn) {
-            shareTipJarBtn.addEventListener('click', () => {
-                this.shareOnTwitter(tipJarId);
-            });
-        }
-        
-        this.currentTipJar = tipJarId;
-        
-        document.title = `Tip Jar - ${tipJarId} | Solana Tip Tap`;
-        
-        const metaDescription = document.querySelector('meta[name="description"]');
-        if (metaDescription) {
-            metaDescription.content = `Send SOL tips to ${tipJarId} on Solana Tip Tap. Fast, secure crypto tipping powered by Solana blockchain.`;
+        if (tipJarData && typeof StorageManager !== 'undefined') {
+            StorageManager.saveTipJar(tipJarId, tipJarData);
         }
     }
+
+    if (!tipJarData) {
+        this.showNotification('Tip jar not found. Please check the URL.', 'error');
+        setTimeout(() => window.location.href = '/', 3000);
+        return;
+    }
+
+    const mainElement = document.querySelector('main');
+    const templateElement = document.getElementById('tipJarPageTemplate');
+    
+    if (mainElement && templateElement) {
+        mainElement.innerHTML = templateElement.innerHTML;
+    }
+    
+    const walletAddressElement = document.getElementById('walletAddress');
+    if (walletAddressElement) {
+        walletAddressElement.textContent = `${tipJarData.wallet.slice(0, 8)}...${tipJarData.wallet.slice(-8)}`;
+    }
+    
+    // Generate wallet QR code for payments
+    if (typeof QRManager !== 'undefined') {
+        QRManager.generateWalletQR('walletQR', tipJarData.wallet);
+    }
+    
+    this.updateTipCounter(tipJarData.tips || 0, tipJarData.totalAmount || 0);
+    
+    // ✅ NEW: Update tip button prices with bigger USD amounts
+    setTimeout(async () => {
+        try {
+            const solPrice = await this.getSolPrice();
+            const tipButtons = document.querySelectorAll('.tip-btn');
+            
+            // ✅ UPDATED: Bigger USD amounts
+            const usdAmounts = [3, 5, 10];
+            const emojis = ['☕', '🍕', '🚀'];
+            const buttonStyles = [
+                'tip-btn w-full bg-solana-purple hover:bg-purple-700 py-3 rounded-lg font-semibold transition-colors',
+                'tip-btn w-full bg-solana-purple hover:bg-purple-700 py-3 rounded-lg font-semibold transition-colors',
+                'tip-btn w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors'
+            ];
+            
+            tipButtons.forEach((button, index) => {
+                if (index < usdAmounts.length) {
+                    const usdAmount = usdAmounts[index];
+                    const solAmount = (usdAmount / solPrice).toFixed(4);
+                    
+                    // Update data-amount attribute for transaction
+                    button.dataset.amount = solAmount;
+                    
+                    // Update button text with USD-first display
+                    button.textContent = `Tip $${usdAmount} (~${solAmount} SOL) ${emojis[index]}`;
+                    
+                    // Update button styling
+                    button.className = buttonStyles[index];
+                }
+            });
+            
+            console.log(`✅ Updated tip buttons: $3, $5, $10 (SOL at $${solPrice.toFixed(2)})`);
+        } catch (error) {
+            console.error('Failed to update tip button prices:', error);
+            
+            // ✅ FALLBACK: If price fetch fails, use default SOL amounts
+            const tipButtons = document.querySelectorAll('.tip-btn');
+            const fallbackAmounts = [0.017, 0.028, 0.056]; // Approximate SOL for $3, $5, $10
+            const emojis = ['☕', '🍕', '🚀'];
+            
+            tipButtons.forEach((button, index) => {
+                if (index < fallbackAmounts.length) {
+                    const solAmount = fallbackAmounts[index];
+                    const usdAmount = [3, 5, 10][index];
+                    
+                    button.dataset.amount = solAmount;
+                    button.textContent = `Tip $${usdAmount} (~${solAmount} SOL) ${emojis[index]}`;
+                }
+            });
+        }
+    }, 1000);
+    
+    const copyWalletBtn = document.getElementById('copyWallet');
+    if (copyWalletBtn) {
+        copyWalletBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(tipJarData.wallet).then(() => {
+                this.showNotification('Wallet address copied!', 'success');
+            }).catch(() => {
+                this.showNotification('Failed to copy wallet address', 'error');
+            });
+        });
+    }
+    
+    const shareTipJarBtn = document.getElementById('shareTipJar');
+    if (shareTipJarBtn) {
+        shareTipJarBtn.addEventListener('click', () => {
+            this.shareOnTwitter(tipJarId);
+        });
+    }
+    
+    this.currentTipJar = tipJarId;
+    
+    // ✅ ENHANCED: Better page title and meta description
+    document.title = `💜 Tip ${tipJarId} with SOL | Solana Tip Tap`;
+    
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+        metaDescription.content = `Send $3, $5, or $10 SOL tips to ${tipJarId} instantly! Fast, secure crypto tipping on Solana blockchain.`;
+    }
+    
+    // ✅ NEW: Add Open Graph tags for better social sharing
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) {
+        ogTitle.content = `💜 Tip ${tipJarId} with SOL`;
+    }
+    
+    const ogDescription = document.querySelector('meta[property="og:description"]');
+    if (ogDescription) {
+        ogDescription.content = `Send instant SOL tips ($3, $5, $10) to ${tipJarId} on Solana Tip Tap!`;
+    }
+    
+    // ✅ NEW: Update Twitter card
+    const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+    if (twitterTitle) {
+        twitterTitle.content = `💜 Tip ${tipJarId} with SOL`;
+    }
+    
+    const twitterDescription = document.querySelector('meta[name="twitter:description"]');
+    if (twitterDescription) {
+        twitterDescription.content = `Send instant SOL tips ($3, $5, $10) to ${tipJarId}!`;
+    }
+}
+
 
     copyToClipboard(elementId) {
         const element = document.getElementById(elementId);
@@ -870,36 +946,68 @@ class SolanaTipTap {
     }
 
     // ✅ NEW: Get current SOL price
-    async getSolPrice() {
-        try {
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-            const data = await response.json();
-            return data.solana?.usd || 179;
-        } catch (error) {
-            console.error('Failed to fetch SOL price:', error);
-            return 179; // Fallback price
+async getSolPrice() {
+    try {
+        // Try CoinGecko first
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+        const data = await response.json();
+        
+        if (data.solana?.usd) {
+            return data.solana.usd;
         }
+        
+        // Fallback to CoinCap
+        const fallbackResponse = await fetch('https://api.coincap.io/v2/assets/solana');
+        const fallbackData = await fallbackResponse.json();
+        
+        if (fallbackData.data?.priceUsd) {
+            return parseFloat(fallbackData.data.priceUsd);
+        }
+        
+        return 179; // Final fallback
+    } catch (error) {
+        console.error('Failed to fetch SOL price:', error);
+        return 179; // Fallback price
     }
+}
 
     // ✅ NEW: Update tip button prices
-    async updateTipButtonPrices() {
-        try {
-            const solPrice = await this.getSolPrice();
-            const tipButtons = document.querySelectorAll('.tip-btn');
-            
-            tipButtons.forEach(button => {
-                const amount = parseFloat(button.dataset.amount);
-                const usdValue = (amount * solPrice).toFixed(2);
-                const currentText = button.textContent;
-                const newText = currentText.replace(/\(~\$[\d.]+\)/, `(~$${usdValue})`);
-                button.textContent = newText;
-            });
-            
-            console.log(`Updated tip button prices with SOL at $${solPrice}`);
-        } catch (error) {
-            console.error('Failed to update tip button prices:', error);
-        }
+   async updateTipButtonPrices() {
+    try {
+        const solPrice = await this.getSolPrice();
+        const tipButtons = document.querySelectorAll('.tip-btn');
+        
+        // ✅ NEW: USD-first pricing
+        const usdAmounts = [3, 5, 10]; // Target USD amounts
+        
+        tipButtons.forEach((button, index) => {
+            if (index < usdAmounts.length) {
+                const usdAmount = usdAmounts[index];
+                const solAmount = (usdAmount / solPrice).toFixed(4);
+                
+                // Update data-amount attribute
+                button.dataset.amount = solAmount;
+                
+                // Update button text with emojis
+                const emojis = ['☕', '🍕', '🚀'];
+                const emoji = emojis[index] || '💜';
+                
+                button.textContent = `Tip $${usdAmount} (~${solAmount} SOL) ${emoji}`;
+                
+                // Update button styling based on amount
+                if (index === 2) { // $10 button
+                    button.className = 'tip-btn w-full bg-solana-green hover:bg-green-400 text-black py-3 rounded-lg font-semibold transition-colors';
+                } else {
+                    button.className = 'tip-btn w-full bg-solana-purple hover:bg-purple-700 py-3 rounded-lg font-semibold transition-colors';
+                }
+            }
+        });
+        
+        console.log(`Updated tip buttons: $3, $5, $10 (SOL at $${solPrice})`);
+    } catch (error) {
+        console.error('Failed to update tip button prices:', error);
     }
+}
 
     // ✅ NEW: Format numbers nicely
     formatNumber(num) {
