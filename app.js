@@ -2,7 +2,19 @@
 class SolanaTipTap {
     constructor() {
         this.wallet = null;
-        this.connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
+        
+        // ✅ FIXED: Use multiple RPC endpoints with fallback
+        this.rpcEndpoints = [
+            'https://api.mainnet-beta.solana.com',
+            'https://solana-api.projectserum.com',
+            'https://rpc.ankr.com/solana',
+            'https://solana-mainnet.g.alchemy.com/v2/demo', // Free tier
+            'https://api.metaplex.solana.com'
+        ];
+        
+        this.currentRpcIndex = 0;
+        this.connection = new solanaWeb3.Connection(this.rpcEndpoints[0], 'confirmed');
+        
         this.setupFeeWallet = 'B7zzqLYVNm2urtdoX9NMxfhj6CwaQzjSnnVZE4rCWgfU';
         this.currentTipJar = null;
         
@@ -11,6 +23,86 @@ class SolanaTipTap {
         this.supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxa2ZpdmV3YmhpZ3ljcG90Y3JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MDI4NTMsImV4cCI6MjA2ODM3ODg1M30.JJGxHm2q_BlANnmTiJLly9ocV8OBjrfLU18LBpkWNJs';
         
         this.init();
+    }
+
+    // ✅ NEW: Switch to next RPC endpoint on failure
+    async switchRpcEndpoint() {
+        this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcEndpoints.length;
+        const newEndpoint = this.rpcEndpoints[this.currentRpcIndex];
+        
+        console.log(`Switching to RPC endpoint: ${newEndpoint}`);
+        this.connection = new solanaWeb3.Connection(newEndpoint, 'confirmed');
+        
+        this.showNotification(`Switching to backup server...`, 'info');
+        return newEndpoint;
+    }
+
+    // ✅ FIXED: Enhanced getRecentBlockhash with fallback
+    async getRecentBlockhashWithFallback(maxRetries = 3) {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                console.log(`Attempting to get blockhash from: ${this.rpcEndpoints[this.currentRpcIndex]}`);
+                
+                const { blockhash, feeCalculator } = await this.connection.getRecentBlockhash('confirmed');
+                
+                console.log('Successfully got blockhash:', blockhash);
+                return { blockhash, feeCalculator };
+                
+            } catch (error) {
+                console.error(`Blockhash attempt ${attempt + 1} failed:`, error);
+                
+                if (attempt < maxRetries - 1) {
+                    await this.switchRpcEndpoint();
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                } else {
+                    throw new Error(`Failed to get blockhash after ${maxRetries} attempts: ${error.message}`);
+                }
+            }
+        }
+    }
+
+    // ✅ FIXED: Enhanced transaction sending with fallback
+    async sendTransactionWithFallback(transaction, maxRetries = 3) {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                console.log(`Sending transaction attempt ${attempt + 1}`);
+                
+                const signature = await this.connection.sendRawTransaction(
+                    transaction.serialize(),
+                    {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    }
+                );
+                
+                console.log('Transaction sent, signature:', signature);
+                
+                // Wait for confirmation
+                const confirmation = await this.connection.confirmTransaction(signature, 'confirmed');
+                
+                if (confirmation.value.err) {
+                    throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+                }
+                
+                console.log('Transaction confirmed:', signature);
+                return signature;
+                
+            } catch (error) {
+                console.error(`Transaction attempt ${attempt + 1} failed:`, error);
+                
+                if (attempt < maxRetries - 1) {
+                    await this.switchRpcEndpoint();
+                    
+                    // Re-get blockhash with new endpoint
+                    const { blockhash } = await this.getRecentBlockhashWithFallback();
+                    transaction.recentBlockhash = blockhash;
+                    
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+                } else {
+                    throw error;
+                }
+            }
+        }
     }
 
     async init() {
@@ -94,6 +186,7 @@ class SolanaTipTap {
                 }
                 
                 this.showNotification('Wallet connected! Ready to create your tip jar! 🎉', 'success');
+                console.log('Wallet connected:', this.wallet);
             } else {
                 this.showNotification('Please install Phantom wallet', 'error');
                 window.open('https://phantom.app/', '_blank');
@@ -199,7 +292,6 @@ class SolanaTipTap {
             const dbData = data[0];
             
             if (dbData) {
-                // Convert database format to app format
                 return {
                     id: dbData.id,
                     wallet: dbData.wallet,
@@ -256,7 +348,6 @@ class SolanaTipTap {
                 return;
             }
 
-            // Check if custom name exists in database
             if (type === 'custom') {
                 this.showNotification('Checking name availability...', 'info');
                 const existingTipJar = await this.loadTipJarFromDatabase(customName);
@@ -281,7 +372,7 @@ class SolanaTipTap {
                 created: Date.now(),
                 tips: 0,
                 totalAmount: 0,
-                plan: type === 'default' ? 'free' : 'premium'
+                             plan: type === 'default' ? 'free' : 'premium'
             };
 
             // Save to both localStorage AND database
@@ -304,8 +395,11 @@ class SolanaTipTap {
         }
     }
 
+    // ✅ FIXED: Enhanced payment processing with fallback RPC
     async processPayment(amount) {
         try {
+            this.showNotification('Preparing transaction...', 'info');
+            
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: new solanaWeb3.PublicKey(this.wallet),
@@ -314,19 +408,35 @@ class SolanaTipTap {
                 })
             );
 
-            const { blockhash } = await this.connection.getRecentBlockhash();
+            // Get blockhash with fallback
+            const { blockhash } = await this.getRecentBlockhashWithFallback();
             transaction.recentBlockhash = blockhash;
             transaction.feePayer = new solanaWeb3.PublicKey(this.wallet);
 
-            const signedTransaction = await window.solana.signTransaction(transaction);
-            const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+            this.showNotification('Please approve the transaction in your wallet...', 'info');
             
-            await this.connection.confirmTransaction(signature);
+            // Sign transaction
+            const signedTransaction = await window.solana.signTransaction(transaction);
+            
+            this.showNotification('Sending transaction...', 'info');
+            
+            // Send with fallback
+            const signature = await this.sendTransactionWithFallback(signedTransaction);
             
             this.showNotification(`Payment of ${amount} SOL successful!`, 'success');
+            console.log('Payment successful, signature:', signature);
             
         } catch (error) {
             console.error('Payment failed:', error);
+            
+            if (error.message.includes('User rejected')) {
+                this.showNotification('Transaction cancelled by user', 'warning');
+            } else if (error.message.includes('403') || error.message.includes('forbidden')) {
+                this.showNotification('Network error. Please try again in a moment.', 'error');
+            } else {
+                this.showNotification('Payment failed. Please try again.', 'error');
+            }
+            
             throw new Error('Payment failed');
         }
     }
@@ -361,7 +471,7 @@ class SolanaTipTap {
         if (featuresSection) featuresSection.classList.add('hidden');
         if (tipJarSection) tipJarSection.classList.remove('hidden');
         
-        // Create clean URL - just the ID as path (no parameters needed!)
+        // Create clean URL
         const tipJarUrl = `${window.location.origin}/${tipJarId}`;
         
         const tipJarUrlElement = document.getElementById('tipJarUrl');
@@ -369,18 +479,18 @@ class SolanaTipTap {
             tipJarUrlElement.textContent = tipJarUrl;
         }
         
-        // Generate QR code for sharing the tip jar URL (FIXED: Use generateUrlQR for links)
+        // Generate QR code for sharing the tip jar URL
         if (typeof QRManager !== 'undefined') {
             QRManager.generateUrlQR('qrcode', tipJarUrl);
         }
         
         this.currentTipJar = tipJarId;
         
-               // Show success message
         const planType = tipJarData.plan === 'premium' ? 'Premium' : 'Free';
         this.showNotification(`${planType} tip jar created successfully! Works on any device! 🌍`, 'success');
     }
 
+    // ✅ FIXED: Enhanced tip processing with fallback RPC
     async processTip(amount) {
         if (!this.currentTipJar) return;
         
@@ -397,7 +507,7 @@ class SolanaTipTap {
                 return;
             }
 
-            this.showNotification('Processing tip...', 'info');
+            this.showNotification('Preparing tip transaction...', 'info');
 
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
@@ -407,14 +517,20 @@ class SolanaTipTap {
                 })
             );
 
-            const { blockhash } = await this.connection.getRecentBlockhash();
+            // Get blockhash with fallback
+            const { blockhash } = await this.getRecentBlockhashWithFallback();
             transaction.recentBlockhash = blockhash;
             transaction.feePayer = new solanaWeb3.PublicKey(this.wallet);
 
-            const signedTransaction = await window.solana.signTransaction(transaction);
-            const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
+            this.showNotification('Please approve the tip in your wallet...', 'info');
             
-            await this.connection.confirmTransaction(signature);
+            // Sign transaction
+            const signedTransaction = await window.solana.signTransaction(transaction);
+            
+            this.showNotification('Sending tip...', 'info');
+            
+            // Send with fallback
+            const signature = await this.sendTransactionWithFallback(signedTransaction);
             
             // Update tip counter
             tipJarData.tips += 1;
@@ -432,10 +548,20 @@ class SolanaTipTap {
             
             this.updateTipCounter(tipJarData.tips, tipJarData.totalAmount);
             this.showNotification(`Thanks for tipping ${amount} SOL! 🎉`, 'success');
+            console.log('Tip successful, signature:', signature);
             
         } catch (error) {
             console.error('Tip failed:', error);
-            this.showNotification('Tip failed. Please try again.', 'error');
+            
+            if (error.message.includes('User rejected')) {
+                this.showNotification('Tip cancelled by user', 'warning');
+            } else if (error.message.includes('403') || error.message.includes('forbidden')) {
+                this.showNotification('Network error. Please try again in a moment.', 'error');
+            } else if (error.message.includes('insufficient')) {
+                this.showNotification('Insufficient SOL balance for this tip', 'error');
+            } else {
+                this.showNotification('Tip failed. Please try again.', 'error');
+            }
         }
     }
 
@@ -450,9 +576,8 @@ class SolanaTipTap {
     checkForTipJarPage() {
         const path = window.location.pathname;
         
-        // Check if we're on a tip jar page (not homepage)
         if (path !== '/' && path.length > 1) {
-            const tipJarId = path.substring(1); // Remove leading slash
+            const tipJarId = path.substring(1);
             if (tipJarId && tipJarId.length >= 3) {
                 this.loadTipJarPage(tipJarId);
             }
@@ -460,28 +585,23 @@ class SolanaTipTap {
     }
 
     async loadTipJarPage(tipJarId) {
-        // Try localStorage first (fast)
         let tipJarData = typeof StorageManager !== 'undefined' ? StorageManager.getTipJar(tipJarId) : null;
         
-        // If not found locally, try database
         if (!tipJarData) {
             this.showNotification('Loading tip jar...', 'info');
             tipJarData = await this.loadTipJarFromDatabase(tipJarId);
             
             if (tipJarData && typeof StorageManager !== 'undefined') {
-                // Save locally for faster future access
                 StorageManager.saveTipJar(tipJarId, tipJarData);
             }
         }
 
-        // If still not found, show error
         if (!tipJarData) {
             this.showNotification('Tip jar not found. Please check the URL.', 'error');
             setTimeout(() => window.location.href = '/', 3000);
             return;
         }
 
-        // Hide main content and show tip jar page
         const mainElement = document.querySelector('main');
         const templateElement = document.getElementById('tipJarPageTemplate');
         
@@ -489,21 +609,18 @@ class SolanaTipTap {
             mainElement.innerHTML = templateElement.innerHTML;
         }
         
-        // Set wallet address
         const walletAddressElement = document.getElementById('walletAddress');
         if (walletAddressElement) {
             walletAddressElement.textContent = `${tipJarData.wallet.slice(0, 8)}...${tipJarData.wallet.slice(-8)}`;
         }
         
-        // Generate wallet QR code for payments (FIXED: Use generateWalletQR for payments)
+        // Generate wallet QR code for payments
         if (typeof QRManager !== 'undefined') {
             QRManager.generateWalletQR('walletQR', tipJarData.wallet);
         }
         
-        // Update tip counter
         this.updateTipCounter(tipJarData.tips || 0, tipJarData.totalAmount || 0);
         
-        // Set up copy wallet functionality
         const copyWalletBtn = document.getElementById('copyWallet');
         if (copyWalletBtn) {
             copyWalletBtn.addEventListener('click', () => {
@@ -515,7 +632,6 @@ class SolanaTipTap {
             });
         }
         
-        // Set up share functionality
         const shareTipJarBtn = document.getElementById('shareTipJar');
         if (shareTipJarBtn) {
             shareTipJarBtn.addEventListener('click', () => {
@@ -525,10 +641,8 @@ class SolanaTipTap {
         
         this.currentTipJar = tipJarId;
         
-        // Update page title
         document.title = `Tip Jar - ${tipJarId} | Solana Tip Tap`;
         
-        // Update meta description for better sharing
         const metaDescription = document.querySelector('meta[name="description"]');
         if (metaDescription) {
             metaDescription.content = `Send SOL tips to ${tipJarId} on Solana Tip Tap. Fast, secure crypto tipping powered by Solana blockchain.`;
@@ -569,7 +683,7 @@ class SolanaTipTap {
     }
 
     startCountdown() {
-        const endTime = new Date().getTime() + (48 * 60 * 60 * 1000); // 48 hours from now
+        const endTime = new Date().getTime() + (48 * 60 * 60 * 1000);
         
         const timer = setInterval(() => {
             const now = new Date().getTime();
@@ -597,7 +711,6 @@ class SolanaTipTap {
     }
 
     updateSocialProof() {
-        // Simulate growing user count
         const baseCount = 100;
         const randomAdd = Math.floor(Math.random() * 50);
         const totalUsers = baseCount + randomAdd;
@@ -609,7 +722,6 @@ class SolanaTipTap {
     }
 
     showNotification(message, type = 'info') {
-        // Remove any existing notifications first
         const existingNotifications = document.querySelectorAll('.notification-toast');
         existingNotifications.forEach(notification => {
             if (document.body.contains(notification)) {
@@ -617,13 +729,11 @@ class SolanaTipTap {
             }
         });
 
-        // Create notification element
         const notification = document.createElement('div');
         notification.className = `notification-toast fixed top-4 right-4 px-6 py-3 rounded-lg font-semibold z-50 transition-all duration-300 transform translate-x-full max-w-sm`;
         
-        // Set colors based on type
         switch (type) {
-            case 'success':
+                        case 'success':
                 notification.className += ' bg-green-600 text-white';
                 break;
             case 'error':
@@ -642,12 +752,10 @@ class SolanaTipTap {
         notification.textContent = message;
         document.body.appendChild(notification);
         
-        // Animate in
         setTimeout(() => {
             notification.classList.remove('translate-x-full');
         }, 100);
         
-        // Remove after 3 seconds
         setTimeout(() => {
             notification.classList.add('translate-x-full');
             setTimeout(() => {
@@ -658,68 +766,122 @@ class SolanaTipTap {
         }, 3000);
     }
 
-    // Error handling for wallet disconnection
-    handleWalletDisconnect() {
-        this.wallet = null;
-        const connectButton = document.getElementById('connectWallet');
-        if (connectButton) {
-            connectButton.textContent = 'Connect Wallet';
-            connectButton.classList.remove('bg-green-600');
-            connectButton.classList.add('bg-solana-purple');
-        }
-        this.showNotification('Wallet disconnected', 'warning');
-    }
-
-    // Get current tip jar data
-    getCurrentTipJarData() {
-        if (this.currentTipJar && typeof StorageManager !== 'undefined') {
-            return StorageManager.getTipJar(this.currentTipJar);
-        }
-        return null;
-    }
-
-    // Handle browser back/forward navigation
-    handlePopState() {
-        // Reload the page to handle navigation properly
-        window.location.reload();
-    }
-
-    // Check if we're on mobile device
-    isMobile() {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    }
-
-    // Get SOL price (optional feature)
-    async getSolPrice() {
+    // ✅ NEW: Test RPC connection
+    async testRpcConnection() {
         try {
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
-            const data = await response.json();
-            return data.solana?.usd || 172; // Fallback price
+            console.log(`Testing RPC: ${this.rpcEndpoints[this.currentRpcIndex]}`);
+            const slot = await this.connection.getSlot();
+            console.log(`RPC working, current slot: ${slot}`);
+            return true;
         } catch (error) {
-            console.error('Failed to fetch SOL price:', error);
-            return 172; // Fallback price
+            console.error(`RPC test failed: ${error.message}`);
+            return false;
         }
     }
 
-    // Update tip button prices with current SOL price
-    async updateTipButtonPrices() {
-        try {
-            const solPrice = await this.getSolPrice();
-            const tipButtons = document.querySelectorAll('.tip-btn');
+    // ✅ NEW: Initialize with RPC testing
+    async initWithRpcTest() {
+        // Test current RPC endpoint
+        const isWorking = await this.testRpcConnection();
+        
+        if (!isWorking) {
+            this.showNotification('Testing backup servers...', 'info');
             
-            tipButtons.forEach(button => {
-                const amount = parseFloat(button.dataset.amount);
-                const usdValue = (amount * solPrice).toFixed(2);
-                const currentText = button.textContent;
-                const newText = currentText.replace(/\(~\$[\d.]+\)/, `(~$${usdValue})`);
-                button.textContent = newText;
-            });
+            // Try other endpoints
+            for (let i = 1; i < this.rpcEndpoints.length; i++) {
+                await this.switchRpcEndpoint();
+                const testResult = await this.testRpcConnection();
+                
+                if (testResult) {
+                    this.showNotification('Connected to backup server', 'success');
+                    break;
+                }
+            }
+        }
+        
+        // Continue with normal initialization
+        this.setupEventListeners();
+        this.startCountdown();
+        this.checkForTipJarPage();
+        this.updateSocialProof();
+    }
+
+    // ✅ NEW: Get wallet balance with fallback
+    async getWalletBalance() {
+        if (!this.wallet) return 0;
+        
+        try {
+            const publicKey = new solanaWeb3.PublicKey(this.wallet);
+            const balance = await this.connection.getBalance(publicKey);
+            return balance / solanaWeb3.LAMPORTS_PER_SOL;
         } catch (error) {
-            console.error('Failed to update tip button prices:', error);
+            console.error('Failed to get wallet balance:', error);
+            
+            // Try with different RPC
+            await this.switchRpcEndpoint();
+            try {
+                const publicKey = new solanaWeb3.PublicKey(this.wallet);
+                const balance = await this.connection.getBalance(publicKey);
+                return balance / solanaWeb3.LAMPORTS_PER_SOL;
+            } catch (retryError) {
+                console.error('Balance check failed on backup RPC:', retryError);
+                return 0;
+            }
         }
     }
 
-    // Initialize wallet event listeners
+    // ✅ NEW: Check sufficient balance before transaction
+    async checkSufficientBalance(amount) {
+        const balance = await this.getWalletBalance();
+        const requiredAmount = amount + 0.000005; // Add buffer for transaction fees
+        
+        console.log(`Balance: ${balance} SOL, Required: ${requiredAmount} SOL`);
+        
+        if (balance < requiredAmount) {
+            this.showNotification(`Insufficient balance. You need ${requiredAmount.toFixed(6)} SOL but have ${balance.toFixed(6)} SOL`, 'error');
+            return false;
+        }
+        
+        return true;
+    }
+
+    // ✅ ENHANCED: Process tip with balance check
+    async processTipWithBalanceCheck(amount) {
+        if (!this.wallet) {
+            this.showNotification('Please connect your wallet first', 'error');
+            return;
+        }
+
+        // Check balance first
+        const hasSufficientBalance = await this.checkSufficientBalance(amount);
+        if (!hasSufficientBalance) {
+            return;
+        }
+
+        // Proceed with tip
+        return this.processTip(amount);
+    }
+
+    // ✅ NEW: Auto-connect wallet if previously connected
+    async autoConnectWallet() {
+        try {
+            if (window.solana && window.solana.isConnected) {
+                this.wallet = window.solana.publicKey.toString();
+                const connectBtn = document.getElementById('connectWallet');
+                if (connectBtn) {
+                    connectBtn.textContent = `${this.wallet.slice(0, 4)}...${this.wallet.slice(-4)}`;
+                    connectBtn.classList.add('bg-green-600');
+                    connectBtn.classList.remove('bg-solana-purple');
+                }
+                console.log('Wallet auto-connected:', this.wallet);
+                this.showNotification('Wallet reconnected!', 'success');
+            }
+        } catch (error) {
+            console.error('Auto-connect failed:', error);
+        }
+    }
+
+    // ✅ NEW: Handle wallet events
     initWalletListeners() {
         if (window.solana) {
             window.solana.on('connect', () => {
@@ -746,44 +908,67 @@ class SolanaTipTap {
         }
     }
 
-    // Check if tip jar ID is valid format
-    isValidTipJarId(id) {
-        return /^[a-zA-Z0-9_-]{3,20}$/.test(id);
+    // ✅ NEW: Handle wallet disconnect
+    handleWalletDisconnect() {
+        this.wallet = null;
+        const connectButton = document.getElementById('connectWallet');
+        if (connectButton) {
+            connectButton.textContent = 'Connect Wallet';
+            connectButton.classList.remove('bg-green-600');
+            connectButton.classList.add('bg-solana-purple');
+        }
+        this.showNotification('Wallet disconnected', 'warning');
     }
 
-    // Get tip jar stats
-    async getTipJarStats(tipJarId) {
+    // ✅ NEW: Enhanced initialization
+    async enhancedInit() {
+        console.log('🚀 Initializing Solana Tip Tap...');
+        
+        // Initialize wallet listeners
+        this.initWalletListeners();
+        
+        // Auto-connect if previously connected
+        await this.autoConnectWallet();
+        
+        // Test RPC and initialize
+        await this.initWithRpcTest();
+        
+        console.log('✅ Solana Tip Tap initialized successfully');
+    }
+
+    // ✅ NEW: Get current SOL price
+    async getSolPrice() {
         try {
-            const response = await fetch(`${this.supabaseUrl}/rest/v1/tip_jars?id=eq.${tipJarId}`, {
-                headers: {
-                    'apikey': this.supabaseKey,
-                                       'Authorization': `Bearer ${this.supabaseKey}`
-                }
+            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+            const data = await response.json();
+            return data.solana?.usd || 172;
+        } catch (error) {
+            console.error('Failed to fetch SOL price:', error);
+            return 172;
+        }
+    }
+
+    // ✅ NEW: Update tip button prices
+    async updateTipButtonPrices() {
+        try {
+            const solPrice = await this.getSolPrice();
+            const tipButtons = document.querySelectorAll('.tip-btn');
+            
+            tipButtons.forEach(button => {
+                const amount = parseFloat(button.dataset.amount);
+                const usdValue = (amount * solPrice).toFixed(2);
+                const currentText = button.textContent;
+                const newText = currentText.replace(/\(~\$[\d.]+\)/, `(~$${usdValue})`);
+                button.textContent = newText;
             });
             
-            if (response.ok) {
-                const data = await response.json();
-                return data[0] || null;
-            }
-            
-            return null;
+            console.log(`Updated tip button prices with SOL at $${solPrice}`);
         } catch (error) {
-            console.error('Failed to get tip jar stats:', error);
-            return null;
+            console.error('Failed to update tip button prices:', error);
         }
     }
 
-    // Validate wallet address format
-    isValidSolanaAddress(address) {
-        try {
-            new solanaWeb3.PublicKey(address);
-            return true;
-        } catch (error) {
-            return false;
-        }
-    }
-
-    // Format large numbers
+    // ✅ NEW: Format numbers nicely
     formatNumber(num) {
         if (num >= 1000000) {
             return (num / 1000000).toFixed(1) + 'M';
@@ -793,7 +978,7 @@ class SolanaTipTap {
         return num.toString();
     }
 
-    // Format SOL amount
+    // ✅ NEW: Format SOL amounts
     formatSolAmount(amount) {
         if (amount < 0.001) {
             return amount.toFixed(6);
@@ -804,244 +989,49 @@ class SolanaTipTap {
         }
     }
 
-    // Get wallet balance
-    async getWalletBalance() {
-        if (!this.wallet) return 0;
-        
-        try {
-            const publicKey = new solanaWeb3.PublicKey(this.wallet);
-            const balance = await this.connection.getBalance(publicKey);
-            return balance / solanaWeb3.LAMPORTS_PER_SOL;
-        } catch (error) {
-            console.error('Failed to get wallet balance:', error);
-            return 0;
-        }
+    // ✅ NEW: Check if on mobile
+    isMobile() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }
 
-    // Check if user has enough SOL for transaction
-    async checkSufficientBalance(amount) {
-        const balance = await this.getWalletBalance();
-        const requiredAmount = amount + 0.000005; // Add small buffer for transaction fees
-        return balance >= requiredAmount;
-    }
-
-    // Enhanced tip processing with balance check
-    async processTipWithValidation(amount) {
-        if (!this.wallet) {
-            this.showNotification('Please connect your wallet first', 'error');
-            return;
-        }
-
-        // Check balance
-        const hasSufficientBalance = await this.checkSufficientBalance(amount);
-        if (!hasSufficientBalance) {
-            this.showNotification('Insufficient SOL balance for this tip', 'error');
-            return;
-        }
-
-        // Proceed with normal tip processing
-        return this.processTip(amount);
-    }
-
-    // Auto-connect wallet if previously connected
-    async autoConnectWallet() {
-        try {
-            if (window.solana && window.solana.isConnected) {
-                this.wallet = window.solana.publicKey.toString();
-                const connectBtn = document.getElementById('connectWallet');
-                if (connectBtn) {
-                    connectBtn.textContent = `${this.wallet.slice(0, 4)}...${this.wallet.slice(-4)}`;
-                    connectBtn.classList.add('bg-green-600');
-                    connectBtn.classList.remove('bg-solana-purple');
-                }
-                console.log('Wallet auto-connected:', this.wallet);
-            }
-        } catch (error) {
-            console.error('Auto-connect failed:', error);
-        }
-    }
-
-    // Enhanced initialization
-    async enhancedInit() {
-        this.setupEventListeners();
-        this.initWalletListeners();
-        await this.autoConnectWallet();
-        this.startCountdown();
-        this.checkForTipJarPage();
-        this.updateSocialProof();
-        
-        // Update tip button prices if on tip jar page
-        if (window.location.pathname !== '/') {
-            setTimeout(() => this.updateTipButtonPrices(), 1000);
-        }
-    }
-
-    // Handle network errors gracefully
-    async handleNetworkError(error, retryFunction, maxRetries = 3) {
-        console.error('Network error:', error);
-        
-        if (maxRetries > 0) {
-            this.showNotification('Network error, retrying...', 'warning');
-            setTimeout(() => {
-                retryFunction(maxRetries - 1);
-            }, 2000);
-        } else {
-            this.showNotification('Network error. Please check your connection.', 'error');
-        }
-    }
-
-    // Enhanced error handling for transactions
-    async processTransactionWithRetry(transaction, maxRetries = 3) {
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                const { blockhash } = await this.connection.getRecentBlockhash();
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = new solanaWeb3.PublicKey(this.wallet);
-
-                const signedTransaction = await window.solana.signTransaction(transaction);
-                const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
-                
-                await this.connection.confirmTransaction(signature);
-                return signature;
-                
-            } catch (error) {
-                console.error(`Transaction attempt ${attempt} failed:`, error);
-                
-                if (attempt === maxRetries) {
-                    throw error;
-                }
-                
-                // Wait before retry
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-            }
-        }
-    }
-
-    // Get tip jar analytics
-    async getTipJarAnalytics(tipJarId) {
-        try {
-            const tipJarData = await this.loadTipJarFromDatabase(tipJarId);
-            if (!tipJarData) return null;
-
-            const now = Date.now();
-            const dayMs = 24 * 60 * 60 * 1000;
-            const weekMs = 7 * dayMs;
-            const monthMs = 30 * dayMs;
-
-            return {
-                totalTips: tipJarData.tips || 0,
-                totalAmount: tipJarData.totalAmount || 0,
-                createdDate: new Date(tipJarData.created),
-                daysActive: Math.floor((now - tipJarData.created) / dayMs),
-                averageTip: tipJarData.tips > 0 ? (tipJarData.totalAmount / tipJarData.tips) : 0,
-                plan: tipJarData.plan || 'free'
-            };
-        } catch (error) {
-            console.error('Failed to get analytics:', error);
-            return null;
-        }
-    }
-
-    // Export tip jar data
-    async exportTipJarData(tipJarId) {
-        try {
-            const analytics = await this.getTipJarAnalytics(tipJarId);
-            if (!analytics) {
-                this.showNotification('Failed to export data', 'error');
-                return;
-            }
-
-            const exportData = {
-                tipJarId: tipJarId,
-                exportDate: new Date().toISOString(),
-                ...analytics
-            };
-
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(dataBlob);
-            link.download = `tip-jar-${tipJarId}-export.json`;
-            link.click();
-            
-            this.showNotification('Data exported successfully!', 'success');
-        } catch (error) {
-            console.error('Export failed:', error);
-            this.showNotification('Failed to export data', 'error');
-        }
-    }
-
-    // Share tip jar with different platforms
-    shareOnPlatform(platform, tipJarId) {
-        const url = `${window.location.origin}/${tipJarId}`;
-        const text = `Send me SOL tips easily! 💜`;
-        
-        const shareUrls = {
-            twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text + ' ' + url + ' #SolanaTipTap #Solana #Crypto')}`,
-            facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
-            linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`,
-            reddit: `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(text)}`,
-            telegram: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`,
-            whatsapp: `https://wa.me/?text=${encodeURIComponent(text + ' ' + url)}`
-        };
-        
-        if (shareUrls[platform]) {
-            window.open(shareUrls[platform], '_blank');
-        }
-    }
-
-    // Copy tip jar link with custom message
-    copyTipJarLink(tipJarId, customMessage = '') {
-        const url = `${window.location.origin}/${tipJarId}`;
-        const message = customMessage || `Check out my Solana tip jar: ${url}`;
-        
-        navigator.clipboard.writeText(message).then(() => {
-            this.showNotification('Tip jar link copied!', 'success');
-        }).catch(() => {
-            this.showNotification('Failed to copy link', 'error');
-        });
-    }
-
-    // Initialize performance monitoring
-    initPerformanceMonitoring() {
-        // Monitor page load time
-        window.addEventListener('load', () => {
-            const loadTime = performance.now();
-            console.log(`Page loaded in ${loadTime.toFixed(2)}ms`);
-        });
-
-        // Monitor transaction times
-        this.transactionStartTime = null;
-    }
-
-    // Log transaction performance
-    logTransactionPerformance(type, success, duration) {
-        console.log(`Transaction ${type}: ${success ? 'SUCCESS' : 'FAILED'} in ${duration}ms`);
+    // ✅ NEW: Handle browser navigation
+    handlePopState() {
+        window.location.reload();
     }
 }
 
-// Initialize app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+// ✅ ENHANCED: Initialize app when DOM is loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('🚀 DOM loaded, initializing Solana Tip Tap...');
+    
     // Check for wallet events
     if (window.solana) {
         window.solana.on('connect', () => {
-            console.log('Wallet connected');
+            console.log('Wallet connected via global event');
         });
         
         window.solana.on('disconnect', () => {
-            console.log('Wallet disconnected');
+            console.log('Wallet disconnected via global event');
             if (window.solanaTipTap) {
                 window.solanaTipTap.handleWalletDisconnect();
             }
         });
     }
     
-    // Initialize the app with enhanced features
+    // Initialize the app
     window.solanaTipTap = new SolanaTipTap();
     
-    // Use enhanced initialization
-    window.solanaTipTap.enhancedInit();
+    // Use enhanced initialization with RPC testing
+    await window.solanaTipTap.enhancedInit();
+    
+    // Update tip button prices if on tip jar page
+    if (window.location.pathname !== '/') {
+        setTimeout(() => {
+            if (window.solanaTipTap) {
+                window.solanaTipTap.updateTipButtonPrices();
+            }
+        }, 2000);
+    }
     
     // Handle browser navigation
     window.addEventListener('popstate', () => {
@@ -1049,17 +1039,18 @@ document.addEventListener('DOMContentLoaded', () => {
             window.solanaTipTap.handlePopState();
         }
     });
+    
+    console.log('✅ Solana Tip Tap fully loaded and ready!');
 });
 
-// Handle page visibility changes
+// ✅ NEW: Handle page visibility changes
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && window.solanaTipTap) {
-        // Refresh social proof when page becomes visible
         window.solanaTipTap.updateSocialProof();
     }
 });
 
-// Handle errors globally
+// ✅ NEW: Global error handling
 window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
     if (window.solanaTipTap) {
@@ -1067,37 +1058,38 @@ window.addEventListener('error', (event) => {
     }
 });
 
-// Handle unhandled promise rejections
+// ✅ NEW: Handle unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
-    if (window.solanaTipTap) {
-        window.solanaTipTap.showNotification('Transaction failed or was cancelled', 'error');
+    if (window.solanaTipTap && event.reason?.message) {
+        if (event.reason.message.includes('User rejected')) {
+            window.solanaTipTap.showNotification('Transaction cancelled by user', 'warning');
+        } else if (event.reason.message.includes('403') || event.reason.message.includes('forbidden')) {
+            window.solanaTipTap.showNotification('Network error. Trying backup servers...', 'warning');
+        } else {
+            window.solanaTipTap.showNotification('Transaction failed. Please try again.', 'error');
+        }
     }
 });
 
-// Service Worker registration (for PWA features)
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-                console.log('SW registered: ', registration);
-            })
-            .catch(registrationError => {
-                console.log('SW registration failed: ', registrationError);
-            });
-    });
-}
-
-// Console welcome message
+// ✅ NEW: Console welcome message
 console.log(`
-🚀 Solana Tip Tap v2.0
+🚀 Solana Tip Tap v2.1 - ENHANCED
 💜 Create your Solana tip jar in seconds!
 ⚡ Powered by Solana blockchain
+🔄 Multiple RPC endpoints with automatic fallback
 🗄️ Database: Supabase
-🔧 Enhanced with auto-connect, analytics, and error handling
+🔧 Enhanced with balance checks, auto-reconnect, and error handling
+
+Current RPC endpoints:
+- api.mainnet-beta.solana.com
+- solana-api.projectserum.com  
+- rpc.ankr.com/solana
+- solana-mainnet.g.alchemy.com
+- api.metaplex.solana.com
 `);
 
-// Export for testing (if needed)
+// ✅ NEW: Export for testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SolanaTipTap;
 }
