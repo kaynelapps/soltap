@@ -146,7 +146,7 @@ class SolanaTipTap {
             const saved = StorageManager.saveTipJar(tipJarId, tipJarData);
             console.log('Save result:', saved);
             
-            // Show success with universal URL
+            // Show success with universal URL - PASS tipJarData
             this.showTipJarSuccess(tipJarId, tipJarData);
             
         } catch (error) {
@@ -188,6 +188,8 @@ class SolanaTipTap {
 
     // Updated to create universal URLs that work on any device
     showTipJarSuccess(tipJarId, tipJarData) {
+        console.log('🎯 showTipJarSuccess called with:', { tipJarId, tipJarData });
+        
         // Hide other sections
         document.getElementById('heroSection').classList.add('hidden');
         document.getElementById('customNameSection').classList.add('hidden');
@@ -198,6 +200,8 @@ class SolanaTipTap {
         
         // Create UNIVERSAL URL that works on any device/browser
         const tipJarUrl = `${window.location.origin}/?id=${tipJarId}&wallet=${encodeURIComponent(tipJarData.wallet)}&type=${tipJarData.type}&created=${tipJarData.created}`;
+        console.log('🌍 Generated universal URL:', tipJarUrl);
+        
         document.getElementById('tipJarUrl').textContent = tipJarUrl;
         
         // Generate QR code
@@ -239,7 +243,7 @@ class SolanaTipTap {
             const signedTransaction = await window.solana.signTransaction(transaction);
             const signature = await this.connection.sendRawTransaction(signedTransaction.serialize());
             
-            await this.connection.confirmTransaction(signature);
+                     await this.connection.confirmTransaction(signature);
             
             // Update tip counter
             tipJarData.tips += 1;
@@ -267,6 +271,8 @@ class SolanaTipTap {
         const urlParams = new URLSearchParams(window.location.search);
         const tipJarId = urlParams.get('id');
         
+        console.log('🔍 Checking for tip jar page, ID:', tipJarId);
+        
         if (tipJarId) {
             this.loadTipJarPage(tipJarId);
         }
@@ -274,16 +280,26 @@ class SolanaTipTap {
 
     // Updated to work universally across all devices and browsers
     loadTipJarPage(tipJarId) {
+        console.log('🔍 Loading tip jar page for ID:', tipJarId);
+        
         const urlParams = new URLSearchParams(window.location.search);
+        console.log('🔍 URL parameters:', Object.fromEntries(urlParams));
         
         // Try localStorage first (for creator's browser)
         let tipJarData = StorageManager.getTipJar(tipJarId);
+        console.log('🔍 Data from localStorage:', tipJarData);
         
         // If not found locally, get from URL parameters (universal access)
         if (!tipJarData) {
+            console.log('🔍 Not found in localStorage, checking URL parameters...');
+            
             const walletFromUrl = urlParams.get('wallet');
             const typeFromUrl = urlParams.get('type') || 'default';
             const createdFromUrl = urlParams.get('created') || Date.now();
+            
+            console.log('🔍 Wallet from URL:', walletFromUrl);
+            console.log('🔍 Type from URL:', typeFromUrl);
+            console.log('🔍 Created from URL:', createdFromUrl);
             
             if (walletFromUrl) {
                 tipJarData = {
@@ -296,19 +312,25 @@ class SolanaTipTap {
                     plan: typeFromUrl === 'default' ? 'free' : 'premium'
                 };
                 
+                console.log('🔍 Created tip jar data from URL:', tipJarData);
+                
                 // Save locally for faster future access
                 StorageManager.saveTipJar(tipJarId, tipJarData);
-                
                 console.log('✅ Tip jar loaded from URL - works on any device!');
+            } else {
+                console.log('❌ No wallet parameter found in URL');
             }
         } else {
             console.log('✅ Tip jar loaded from localStorage - same browser');
         }
-        
+
         if (!tipJarData) {
+            console.log('❌ No tip jar data found');
             this.showNotification('Tip jar not found. Please check the URL.', 'error');
             return;
         }
+
+        console.log('✅ Final tip jar data:', tipJarData);
 
         // Hide main content and show tip jar page
         document.querySelector('main').innerHTML = document.getElementById('tipJarPageTemplate').innerHTML;
@@ -363,7 +385,7 @@ class SolanaTipTap {
             `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto` :
             `Just created my SOL tip jar! 🚀 ${url} #SolanaTipTap #Solana #Crypto`;
         
-               const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+        const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
         window.open(twitterUrl, '_blank');
     }
 
@@ -380,7 +402,10 @@ class SolanaTipTap {
             
             if (distance < 0) {
                 clearInterval(timer);
-                document.getElementById('fomoTimer').style.display = 'none';
+                const fomoTimer = document.getElementById('fomoTimer');
+                if (fomoTimer) {
+                    fomoTimer.style.display = 'none';
+                }
                 return;
             }
             
@@ -388,8 +413,11 @@ class SolanaTipTap {
             const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((distance % (1000 * 60)) / 1000);
             
-            document.getElementById('countdown').textContent = 
-                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            const countdownEl = document.getElementById('countdown');
+            if (countdownEl) {
+                countdownEl.textContent = 
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
         }, 1000);
     }
 
@@ -409,7 +437,9 @@ class SolanaTipTap {
         // Remove any existing notifications
         const existingNotifications = document.querySelectorAll('.notification-toast');
         existingNotifications.forEach(notification => {
-            document.body.removeChild(notification);
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
         });
 
         // Create notification element
@@ -511,10 +541,10 @@ class SolanaTipTap {
     getTipJarStats(tipJarId) {
         const tipJarData = StorageManager.getTipJar(tipJarId);
         if (!tipJarData) return null;
-        
+
         const now = Date.now();
         const ageInDays = Math.floor((now - tipJarData.created) / (1000 * 60 * 60 * 24));
-        
+
         return {
             id: tipJarData.id,
             wallet: tipJarData.wallet,
@@ -532,9 +562,9 @@ class SolanaTipTap {
     generateShareContent(tipJarId, platform = 'twitter') {
         const tipJarData = StorageManager.getTipJar(tipJarId);
         if (!tipJarData) return null;
-        
+
         const url = `${window.location.origin}/?id=${tipJarId}&wallet=${encodeURIComponent(tipJarData.wallet)}&type=${tipJarData.type}&created=${tipJarData.created}`;
-        
+
         const content = {
             twitter: {
                 text: `Send me SOL tips easily! 💜 Support creators on Solana blockchain. ${url} #SolanaTipTap #Solana #Crypto #Web3`,
@@ -553,7 +583,7 @@ class SolanaTipTap {
                 url: `https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent('Created my Solana tip jar - accepting SOL tips!')}`
             }
         };
-        
+
         return content[platform] || content.twitter;
     }
 
@@ -565,8 +595,11 @@ class SolanaTipTap {
             }
             
             this.wallet = null;
-            document.getElementById('connectWallet').textContent = 'Connect Wallet';
-            document.getElementById('connectWallet').classList.remove('bg-green-600');
+            const connectBtn = document.getElementById('connectWallet');
+            if (connectBtn) {
+                connectBtn.textContent = 'Connect Wallet';
+                connectBtn.classList.remove('bg-green-600');
+            }
             
             this.showNotification('Wallet disconnected', 'info');
         } catch (error) {
@@ -576,7 +609,7 @@ class SolanaTipTap {
     }
 
     // Method to check wallet connection status
-    checkWalletConnection() {
+       checkWalletConnection() {
         if (window.solana && window.solana.isConnected) {
             return window.solana.isConnected;
         }
@@ -607,6 +640,51 @@ class SolanaTipTap {
             return 0.000005; // Default estimate
         }
     }
+
+    // Test method for debugging URLs
+    testTipJarUrl() {
+        const testWallet = "B7zzqLYVNm2urtdoX9NMxfhj6CwaQzjSnnVZE4rCWgfU";
+        const testUrl = `${window.location.origin}/?id=12345678&wallet=${encodeURIComponent(testWallet)}&type=default&created=${Date.now()}`;
+        
+        console.log('🧪 Test URL:', testUrl);
+        
+        // Copy to clipboard for testing
+        navigator.clipboard.writeText(testUrl).then(() => {
+            console.log('✅ Test URL copied to clipboard');
+            this.showNotification('Test URL copied to clipboard!', 'info');
+        }).catch(() => {
+            console.log('❌ Failed to copy test URL');
+        });
+        
+        return testUrl;
+    }
+
+    // Method to validate URL parameters
+    validateUrlParameters() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const id = urlParams.get('id');
+        const wallet = urlParams.get('wallet');
+        const type = urlParams.get('type');
+        const created = urlParams.get('created');
+
+        console.log('🔍 URL Validation:', {
+            id: id,
+            wallet: wallet,
+            type: type,
+            created: created,
+            hasId: !!id,
+            hasWallet: !!wallet,
+            isValidWallet: wallet ? this.isValidSolanaAddress(decodeURIComponent(wallet)) : false
+        });
+
+        return {
+            isValid: !!(id && wallet),
+            id,
+            wallet: wallet ? decodeURIComponent(wallet) : null,
+            type: type || 'default',
+            created: created ? parseInt(created) : Date.now()
+        };
+    }
 }
 
 // Initialize app when DOM is loaded
@@ -622,13 +700,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const missingElements = requiredElements.filter(id => !document.getElementById(id));
     
     if (missingElements.length > 0) {
-        console.error('Missing required elements:', missingElements);
+        console.error('❌ Missing required elements:', missingElements);
         return;
     }
-    
+
     // Initialize the application
     try {
-        new SolanaTipTap();
+        window.solanaTipTap = new SolanaTipTap();
         console.log('✅ Solana Tip Tap initialized successfully');
     } catch (error) {
         console.error('❌ Failed to initialize Solana Tip Tap:', error);
@@ -639,15 +717,15 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('load', () => {
     if (window.solana) {
         window.solana.on('connect', () => {
-            console.log('Wallet connected via event');
+            console.log('✅ Wallet connected via event');
         });
-        
+
         window.solana.on('disconnect', () => {
-            console.log('Wallet disconnected via event');
+            console.log('🔌 Wallet disconnected via event');
         });
-        
+
         window.solana.on('accountChanged', (publicKey) => {
-            console.log('Wallet account changed:', publicKey?.toString());
+            console.log('🔄 Wallet account changed:', publicKey?.toString());
             // Optionally reload the page or update the UI
             if (publicKey) {
                 window.location.reload();
@@ -659,12 +737,265 @@ window.addEventListener('load', () => {
 // Handle page visibility changes (for potential real-time updates)
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-        // Page became visible - could refresh tip jar data here
-        console.log('Page became visible');
+        console.log('👁️ Page became visible');
+        // Could refresh tip jar data here if needed
     }
 });
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    console.error('🚨 Global error:', event.error);
+});
+
+// Handle unhandled promise rejections
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('🚨 Unhandled promise rejection:', event.reason);
+    event.preventDefault();
+});
+
+// Debug utilities (only in development)
+if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    window.debugTipTap = {
+        // Test URL generation
+        testUrl: () => {
+            if (window.solanaTipTap) {
+                return window.solanaTipTap.testTipJarUrl();
+            }
+        },
+        // Validate current URL
+        validateUrl: () => {
+            if (window.solanaTipTap) {
+                return window.solanaTipTap.validateUrlParameters();
+            }
+        },
+        // Get current tip jar data
+        getCurrentData: () => {
+            if (window.solanaTipTap) {
+                return window.solanaTipTap.getCurrentTipJarData();
+            }
+        },
+        // Clear all storage
+        clearStorage: () => {
+            if (StorageManager) {
+                StorageManager.clearAllData();
+                console.log('🗑️ Storage cleared');
+            }
+        },
+        // Get all tip jars
+        getAllTipJars: () => {
+            if (StorageManager) {
+                return StorageManager.getAllTipJars();
+            }
+        }
+    };
+    
+    console.log('🛠️ Debug utilities available: window.debugTipTap');
+}
 
 // Export for potential use in other scripts
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = SolanaTipTap;
 }
+
+// Service Worker registration (for PWA capabilities)
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+                console.log('✅ SW registered: ', registration);
+            })
+            .catch((registrationError) => {
+                console.log('❌ SW registration failed: ', registrationError);
+            });
+    });
+}
+
+// Performance monitoring
+if (window.performance && window.performance.mark) {
+    window.performance.mark('app-start');
+    
+    window.addEventListener('load', () => {
+        window.performance.mark('app-loaded');
+        window.performance.measure('app-load-time', 'app-start', 'app-loaded');
+        
+        const measure = window.performance.getEntriesByName('app-load-time')[0];
+        console.log(`⚡ App loaded in ${measure.duration.toFixed(2)}ms`);
+    });
+}
+
+// Analytics helper (privacy-friendly)
+const Analytics = {
+    track: (event, data = {}) => {
+        // Only track in production and with user consent
+        if (window.location.hostname !== 'localhost' && localStorage.getItem('analytics-consent') === 'true') {
+            console.log('📊 Analytics:', event, data);
+            // Add your analytics implementation here
+        }
+    },
+    
+    trackTipJarCreated: (type) => {
+        Analytics.track('tip_jar_created', { type });
+    },
+    
+    trackTipSent: (amount) => {
+        Analytics.track('tip_sent', { amount });
+    },
+    
+    trackWalletConnected: () => {
+        Analytics.track('wallet_connected');
+    }
+};
+
+// Make Analytics available globally
+window.Analytics = Analytics;
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (event) => {
+    // Ctrl/Cmd + K to focus search or connect wallet
+    if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+        event.preventDefault();
+        const connectBtn = document.getElementById('connectWallet');
+        if (connectBtn) {
+            connectBtn.click();
+        }
+    }
+    
+    // Escape to close modals
+    if (event.key === 'Escape') {
+        const customNameSection = document.getElementById('customNameSection');
+        if (customNameSection && !customNameSection.classList.contains('hidden')) {
+            if (window.solanaTipTap) {
+                window.solanaTipTap.hideCustomNameInput();
+            }
+        }
+    }
+});
+
+// Copy to clipboard helper
+const copyToClipboard = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch (err) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            return true;
+        } catch (err) {
+            document.body.removeChild(textArea);
+            return false;
+        }
+    }
+};
+
+// Make copy function globally available
+window.copyToClipboard = copyToClipboard;
+
+// URL validation helper
+const isValidUrl = (string) => {
+    try {
+        new URL(string);
+        return true;
+    } catch (_) {
+        return false;
+    }
+};
+
+// Format currency helper
+const formatCurrency = (amount, currency = 'SOL', decimals = 4) => {
+    return `${parseFloat(amount).toFixed(decimals)} ${currency}`;
+};
+
+// Time formatting helper
+const formatTimeAgo = (timestamp) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    const minute = 60 * 1000;
+    const hour = minute * 60;
+    const day = hour * 24;
+    const week = day * 7;
+    const month = day * 30;
+    const year = day * 365;
+
+    if (diff < minute) return 'just now';
+    if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
+    if (diff < day) return `${Math.floor(diff / hour)}h ago`;
+    if (diff < week) return `${Math.floor(diff / day)}d ago`;
+    if (diff < month) return `${Math.floor(diff / week)}w ago`;
+    if (diff < year) return `${Math.floor(diff / month)}mo ago`;
+    return `${Math.floor(diff / year)}y ago`;
+};
+
+// Make utilities globally available
+window.utils = {
+    isValidUrl,
+    formatCurrency,
+    formatTimeAgo,
+    copyToClipboard
+};
+
+// Connection status monitoring
+let isOnline = navigator.onLine;
+
+window.addEventListener('online', () => {
+    isOnline = true;
+    console.log('🌐 Connection restored');
+    if (window.solanaTipTap) {
+        window.solanaTipTap.showNotification('Connection restored', 'success');
+    }
+});
+
+window.addEventListener('offline', () => {
+    isOnline = false;
+    console.log('📡 Connection lost');
+    if (window.solanaTipTap) {
+        window.solanaTipTap.showNotification('Connection lost - some features may not work', 'warning');
+    }
+});
+
+// Responsive design helpers
+const isMobile = () => {
+    return window.innerWidth <= 768;
+};
+
+const isTablet = () => {
+    return window.innerWidth > 768 && window.innerWidth <= 1024;
+};
+
+const isDesktop = () => {
+    return window.innerWidth > 1024;
+};
+
+// Make responsive helpers available
+window.responsive = {
+    isMobile,
+    isTablet,
+    isDesktop
+};
+
+// Theme detection
+const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Apply reduced motion if preferred
+if (prefersReducedMotion) {
+    document.documentElement.style.setProperty('--animation-duration', '0.01ms');
+}
+
+// Console welcome message
+console.log(`
+🚀 Solana Tip Tap
+💜 Create your Solana tip jar in seconds!
+🔧 Debug tools: window.debugTipTap (dev mode only)
+`);
