@@ -713,9 +713,11 @@ async init() {
         walletAddressElement.textContent = `${tipJarData.wallet.slice(0, 8)}...${tipJarData.wallet.slice(-8)}`;
     }
     
-    // Generate wallet QR code for payments
+    // ✅ FIXED: Generate QR code for tip jar URL (not wallet address)
     if (typeof QRManager !== 'undefined') {
-        QRManager.generateWalletQR('walletQR', tipJarData.wallet);
+        const tipJarUrl = `${window.location.origin}/${tipJarId}`;
+        QRManager.generateUrlQR('walletQR', tipJarUrl);
+        console.log('✅ QR Code generated for tip jar URL:', tipJarUrl);
     }
     
     this.updateTipCounter(tipJarData.tips || 0, tipJarData.totalAmount || 0);
@@ -772,9 +774,11 @@ async init() {
         }
     }, 1000);
     
+    // ✅ FIXED: Copy wallet button copies the FULL wallet address
     const copyWalletBtn = document.getElementById('copyWallet');
     if (copyWalletBtn) {
         copyWalletBtn.addEventListener('click', () => {
+            // Copy the full wallet address, not the truncated version
             navigator.clipboard.writeText(tipJarData.wallet).then(() => {
                 this.showNotification('Wallet address copied!', 'success');
             }).catch(() => {
@@ -823,35 +827,35 @@ async init() {
     }
 }
 
+copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const text = element.textContent;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        this.showNotification('Copied to clipboard!', 'success');
+    }).catch(() => {
+        this.showNotification('Failed to copy', 'error');
+    });
+}
 
-    copyToClipboard(elementId) {
-        const element = document.getElementById(elementId);
-        if (!element) return;
-        
-        const text = element.textContent;
-        
-        navigator.clipboard.writeText(text).then(() => {
-            this.showNotification('Copied to clipboard!', 'success');
-        }).catch(() => {
-            this.showNotification('Failed to copy', 'error');
-        });
+shareOnTwitter(tipJarId = null) {
+    let url, text;
+    
+    if (tipJarId) {
+        url = `${window.location.origin}/${tipJarId}`;
+        text = `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto`;
+    } else {
+        const tipJarUrlElement = document.getElementById('tipJarUrl');
+        url = tipJarUrlElement ? tipJarUrlElement.textContent : window.location.href;
+        text = `Just created my SOL tip jar! 🚀 ${url} #SolanaTipTap #Solana #Crypto`;
     }
+    
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    window.open(twitterUrl, '_blank');
+}
 
-    shareOnTwitter(tipJarId = null) {
-        let url, text;
-        
-        if (tipJarId) {
-            url = `${window.location.origin}/${tipJarId}`;
-            text = `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto`;
-        } else {
-            const tipJarUrlElement = document.getElementById('tipJarUrl');
-            url = tipJarUrlElement ? tipJarUrlElement.textContent : window.location.href;
-            text = `Just created my SOL tip jar! 🚀 ${url} #SolanaTipTap #Solana #Crypto`;
-        }
-        
-        const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-        window.open(twitterUrl, '_blank');
-    }
 
     resetToHome() {
         window.location.href = '/';
