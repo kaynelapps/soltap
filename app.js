@@ -6,6 +6,10 @@ class SolanaTipTap {
         this.setupFeeWallet = 'B7zzqLYVNm2urtdoX9NMxfhj6CwaQzjSnnVZE4rCWgfU';
         this.currentTipJar = null;
         
+        // Your Supabase credentials
+        this.supabaseUrl = 'https://zqkfivewbhigycpotcrl.supabase.co';
+        this.supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxa2ZpdmV3YmhpZ3ljcG90Y3JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MDI4NTMsImV4cCI6MjA2ODM3ODg1M30.JJGxHm2q_BlANnmTiJLly9ocV8OBjrfLU18LBpkWNJs';
+        
         this.init();
     }
 
@@ -96,6 +100,101 @@ class SolanaTipTap {
         return reserved.includes(name.toLowerCase());
     }
 
+    async saveTipJarToDatabase(tipJarData) {
+        try {
+            const response = await fetch(`${this.supabaseUrl}/rest/v1/tip_jars`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': this.supabaseKey,
+                    'Authorization': `Bearer ${this.supabaseKey}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    id: tipJarData.id,
+                    wallet: tipJarData.wallet,
+                    type: tipJarData.type,
+                    created: tipJarData.created,
+                    tips: tipJarData.tips || 0,
+                    total_amount: tipJarData.totalAmount || 0,
+                    plan: tipJarData.plan || 'free'
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                console.error('Database save failed:', error);
+                return false;
+            }
+            
+            console.log('Tip jar saved to database successfully');
+            return true;
+        } catch (error) {
+            console.error('Database save error:', error);
+            return false;
+        }
+    }
+
+    async loadTipJarFromDatabase(tipJarId) {
+        try {
+            const response = await fetch(`${this.supabaseUrl}/rest/v1/tip_jars?id=eq.${tipJarId}`, {
+                headers: {
+                    'apikey': this.supabaseKey,
+                    'Authorization': `Bearer ${this.supabaseKey}`
+                }
+            });
+            
+            if (!response.ok) {
+                console.error('Database load failed:', response.status);
+                return null;
+            }
+            
+            const data = await response.json();
+            const dbData = data[0];
+            
+            if (dbData) {
+                // Convert database format to app format
+                return {
+                    id: dbData.id,
+                    wallet: dbData.wallet,
+                    type: dbData.type,
+                    created: dbData.created,
+                    tips: dbData.tips || 0,
+                    totalAmount: dbData.total_amount || 0,
+                    plan: dbData.plan || 'free'
+                };
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('Database load error:', error);
+            return null;
+        }
+    }
+
+    async updateTipJarInDatabase(tipJarId, updates) {
+        try {
+            const response = await fetch(`${this.supabaseUrl}/rest/v1/tip_jars?id=eq.${tipJarId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': this.supabaseKey,
+                    'Authorization': `Bearer ${this.supabaseKey}`,
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                    tips: updates.tips,
+                    total_amount: updates.totalAmount
+                })
+            });
+            
+            return response.ok;
+        } catch (error) {
+            console.error('Database update error:', error);
+            return false;
+        }
+    }
+
     async createTipJar(type) {
         if (!this.wallet) {
             this.showNotification('Please connect your wallet first', 'error');
@@ -103,23 +202,24 @@ class SolanaTipTap {
         }
 
         try {
-            // Updated fee structure - FREE for default!
             const fee = type === 'default' ? 0 : 0.005;
             const customName = type === 'custom' ? document.getElementById('customName').value : null;
             
-            // Validate custom name if provided
             if (type === 'custom' && (!customName || !this.validateCustomName(customName))) {
                 this.showNotification('Please enter a valid custom name', 'error');
                 return;
             }
 
-            // Check if custom name already exists
-            if (type === 'custom' && StorageManager.getTipJar(customName)) {
-                this.showNotification('This name is already taken', 'error');
-                return;
+            // Check if custom name exists in database
+            if (type === 'custom') {
+                this.showNotification('Checking name availability...', 'info');
+                const existingTipJar = await this.loadTipJarFromDatabase(customName);
+                if (existingTipJar) {
+                    this.showNotification('This name is already taken', 'error');
+                    return;
+                }
             }
 
-            // Only process payment for custom tip jars
             if (fee > 0) {
                 this.showNotification('Processing payment...', 'info');
                 await this.processPayment(fee);
@@ -127,7 +227,6 @@ class SolanaTipTap {
                 this.showNotification('Creating your free tip jar...', 'info');
             }
 
-            // Generate tip jar ID
             const tipJarId = type === 'default' ? this.generateRandomId() : customName;
             const tipJarData = {
                 id: tipJarId,
@@ -139,10 +238,16 @@ class SolanaTipTap {
                 plan: type === 'default' ? 'free' : 'premium'
             };
 
-            // Save tip jar locally
+            // Save to both localStorage AND database
             StorageManager.saveTipJar(tipJarId, tipJarData);
             
-            // Show success with clean URL
+            this.showNotification('Saving to database...', 'info');
+            const dbSaved = await this.saveTipJarToDatabase(tipJarData);
+            
+            if (!dbSaved) {
+                this.showNotification('Warning: Tip jar created locally but not saved to database', 'warning');
+            }
+            
             this.showTipJarSuccess(tipJarId, tipJarData);
             
         } catch (error) {
@@ -178,7 +283,6 @@ class SolanaTipTap {
         }
     }
 
-    // Updated to generate alphanumeric IDs for better URLs
     generateRandomId() {
         const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
         let result = '';
@@ -189,7 +293,6 @@ class SolanaTipTap {
     }
 
     showTipJarSuccess(tipJarId, tipJarData) {
-        // If tipJarData not provided, get it from storage
         if (!tipJarData) {
             tipJarData = StorageManager.getTipJar(tipJarId);
         }
@@ -207,7 +310,7 @@ class SolanaTipTap {
         // Show tip jar section
         document.getElementById('tipJarSection').classList.remove('hidden');
         
-        // Create clean URL - just the ID as path
+        // Create clean URL - just the ID as path (no parameters needed!)
         const tipJarUrl = `${window.location.origin}/${tipJarId}`;
         
         document.getElementById('tipJarUrl').textContent = tipJarUrl;
@@ -219,7 +322,7 @@ class SolanaTipTap {
         
         // Show success message
         const planType = tipJarData.plan === 'premium' ? 'Premium' : 'Free';
-        this.showNotification(`${planType} tip jar created successfully! Clean URL ready to share! 🌍`, 'success');
+        this.showNotification(`${planType} tip jar created successfully! Works on any device! 🌍`, 'success');
     }
 
     async processTip(amount) {
@@ -259,7 +362,13 @@ class SolanaTipTap {
             // Update tip counter
             tipJarData.tips += 1;
             tipJarData.totalAmount += amount;
+            
+            // Save to both localStorage and database
             StorageManager.saveTipJar(this.currentTipJar, tipJarData);
+                       await this.updateTipJarInDatabase(this.currentTipJar, {
+                tips: tipJarData.tips,
+                totalAmount: tipJarData.totalAmount
+            });
             
             this.updateTipCounter(tipJarData.tips, tipJarData.totalAmount);
             this.showNotification(`Thanks for tipping ${amount} SOL! 🎉`, 'success');
@@ -279,61 +388,36 @@ class SolanaTipTap {
     }
 
     checkForTipJarPage() {
-        // Check if we're on a tip jar page (path-based routing)
         const path = window.location.pathname;
         
-        // If we're on homepage (/) or have query params, handle normally
-        if (path === '/' || window.location.search) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const tipJarId = urlParams.get('id');
-            
-            if (tipJarId) {
+        // Check if we're on a tip jar page (not homepage)
+        if (path !== '/' && path.length > 1) {
+            const tipJarId = path.substring(1); // Remove leading slash
+            if (tipJarId && tipJarId.length >= 3) {
                 this.loadTipJarPage(tipJarId);
             }
-            return;
-        }
-        
-        // Extract tip jar ID from path (remove leading slash)
-        const tipJarId = path.substring(1);
-        
-        if (tipJarId && tipJarId.length >= 3) {
-            this.loadTipJarPage(tipJarId);
         }
     }
 
-    loadTipJarPage(tipJarId) {
-        // Try localStorage first (for creator's browser)
+    async loadTipJarPage(tipJarId) {
+        // Try localStorage first (fast)
         let tipJarData = StorageManager.getTipJar(tipJarId);
         
-        // If not found locally, check URL parameters for fallback
+        // If not found locally, try database
         if (!tipJarData) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const walletFromUrl = urlParams.get('wallet');
-            const typeFromUrl = urlParams.get('type') || 'default';
-            const createdFromUrl = urlParams.get('created') || Date.now();
+            this.showNotification('Loading tip jar...', 'info');
+            tipJarData = await this.loadTipJarFromDatabase(tipJarId);
             
-            if (walletFromUrl) {
-                tipJarData = {
-                    id: tipJarId,
-                    wallet: decodeURIComponent(walletFromUrl),
-                    type: typeFromUrl,
-                    created: parseInt(createdFromUrl),
-                    tips: 0,
-                    totalAmount: 0,
-                    plan: typeFromUrl === 'default' ? 'free' : 'premium'
-                };
-                
+            if (tipJarData) {
                 // Save locally for faster future access
                 StorageManager.saveTipJar(tipJarId, tipJarData);
             }
         }
 
+        // If still not found, show error
         if (!tipJarData) {
             this.showNotification('Tip jar not found. Please check the URL.', 'error');
-            // Redirect to homepage after 3 seconds
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 3000);
+            setTimeout(() => window.location.href = '/', 3000);
             return;
         }
 
@@ -391,7 +475,6 @@ class SolanaTipTap {
         let url, text;
         
         if (tipJarId) {
-            // Use clean URL format
             url = `${window.location.origin}/${tipJarId}`;
             text = `Send me SOL tips easily! 💜 ${url} #SolanaTipTap #Solana #Crypto`;
         } else {
@@ -501,24 +584,6 @@ class SolanaTipTap {
         this.showNotification('Wallet disconnected', 'warning');
     }
 
-    // Validate URL parameters (for fallback support)
-    validateUrlParameters() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const tipJarId = urlParams.get('id');
-        const wallet = urlParams.get('wallet');
-        
-        if (tipJarId && !wallet) {
-            // Check if tip jar exists in localStorage
-            const tipJarData = StorageManager.getTipJar(tipJarId);
-            if (!tipJarData) {
-                this.showNotification('Invalid tip jar URL. Missing wallet parameter.', 'error');
-                return false;
-            }
-        }
-        
-        return true;
-    }
-
     // Get current tip jar data
     getCurrentTipJarData() {
         if (this.currentTipJar) {
@@ -590,4 +655,5 @@ console.log(`
 🚀 Solana Tip Tap
 💜 Create your Solana tip jar in seconds!
 ⚡ Powered by Solana blockchain
+🗄️ Database: Supabase
 `);
