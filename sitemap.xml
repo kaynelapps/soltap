@@ -3,7 +3,7 @@
     <!-- Homepage -->
     <url>
         <loc>https://solanatiptap.fun/</loc>
-        <lastmod>2025-07-18</lastmod>
+        <lastmod>2024-01-18T10:00:00+00:00</lastmod>
         <changefreq>weekly</changefreq>
         <priority>1.0</priority>
     </url>
@@ -11,7 +11,7 @@
     <!-- Blog Index -->
     <url>
         <loc>https://solanatiptap.fun/blog/</loc>
-        <lastmod>2025-07-18</lastmod>
+        <lastmod>2024-01-18T10:00:00+00:00</lastmod>
         <changefreq>weekly</changefreq>
         <priority>0.8</priority>
     </url>
@@ -19,14 +19,14 @@
     <!-- Blog Posts -->
     <url>
         <loc>https://solanatiptap.fun/blog/how-to-earn-tips-on-solana.html</loc>
-        <lastmod>2025-07-18</lastmod>
+        <lastmod>2024-01-18T10:00:00+00:00</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.7</priority>
     </url>
     
     <url>
         <loc>https://solanatiptap.fun/blog/solana-vs-other-crypto-tipping.html</loc>
-        <lastmod>2025-07-18</lastmod>
+        <lastmod>2024-01-18T10:00:00+00:00</lastmod>
         <changefreq>monthly</changefreq>
         <priority>0.7</priority>
     </url>
@@ -34,14 +34,14 @@
     <!-- Legal Pages -->
     <url>
         <loc>https://solanatiptap.fun/terms.html</loc>
-        <lastmod>2025-07-18</lastmod>
+        <lastmod>2024-01-18T10:00:00+00:00</lastmod>
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>
     
     <url>
         <loc>https://solanatiptap.fun/privacy.html</loc>
-        <lastmod>2025-07-18</lastmod>
+        <lastmod>2024-01-18T10:00:00+00:00</lastmod>
         <changefreq>yearly</changefreq>
         <priority>0.3</priority>
     </url>
